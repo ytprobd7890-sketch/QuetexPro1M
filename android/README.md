@@ -20,7 +20,7 @@ crop, reads the candles and refreshes the prediction.
 
 ---
 
-## Option A — let GitHub build it (no Android Studio, ~4 minutes)
+## Option A — let GitHub build it (no Android Studio, ~2–3 minutes)
 
 1. Open the repo → **Actions** → **Build Android APK** → **Run workflow**.
 2. Optional: paste your deployed **app URL** in the input box (must be `https://`). Leave it empty to
@@ -42,6 +42,15 @@ Tagging `v1.0.0` builds the same APK and attaches it to a GitHub Release automat
 | Version | `1.0.<run number>` — always increasing, so re-installing over an old build works |
 | Checks | `aapt dump badging` + `apksigner verify` before upload |
 | Also runs | `npm test` (6 suites) and `npm run test:deep` in a parallel job |
+| Verified | debug APK **2.9 MB**, release APK **2.3 MB** — both built green on `ubuntu-latest` |
+
+You can also trigger it from a terminal:
+
+```bash
+gh workflow run android-apk.yml --ref main \
+  -f build_type=debug -f app_url="https://your-host/"
+gh run watch
+```
 
 ---
 

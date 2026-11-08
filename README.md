@@ -1,5 +1,7 @@
 # Quetex Pro 1M
 
+[![Build Android APK](https://github.com/ytprobd7890-sketch/QuetexPro1M/actions/workflows/android-apk.yml/badge.svg)](https://github.com/ytprobd7890-sketch/QuetexPro1M/actions/workflows/android-apk.yml)
+
 **A 1-minute confluence trading terminal, strategy lab and backtester in one page.**
 
 Quetex Pro 1M turns raw OHLCV into a structured desk note: trend, structure, momentum, VWAP and
