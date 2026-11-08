@@ -109,15 +109,39 @@ jobs:
           echo "Baking APP_URL = $url"
 
       - name: Assemble ${{ env.VARIANT }}
+        id: assemble
+        continue-on-error: true
         env:
           APP_URL_IN: ${{ steps.cfg.outputs.url }}
         run: |
-          set -euo pipefail
+          set -o pipefail
           gradle --no-daemon --console=plain --stacktrace \
             -PappUrl="$APP_URL_IN" \
             -PversionCode="$VERSION_CODE" \
             -PversionName="$VERSION_NAME" \
-            ":app:assemble${VARIANT}"
+            ":app:assemble${VARIANT}" 2>&1 | tee "$RUNNER_TEMP/build.log"
+
+      # A failed Gradle run is useless if the reason only lives in the log file,
+      # so lift the compiler messages into check-run annotations.
+      - name: Report build errors
+        if: steps.assemble.outcome == 'failure'
+        run: |
+          log="$RUNNER_TEMP/build.log"
+          { echo "### Gradle failure"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          if [ ! -f "$log" ]; then
+            echo "::error::Gradle failed with no log output"
+            echo "no log" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          grep -E "^e: |error:|FAILURE:|What went wrong|Could not resolve|Caused by:" "$log" \
+            | head -40 > errors.txt || true
+          sed -n '1,40p' errors.txt
+          sed -n '1,40p' errors.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          while IFS= read -r line; do
+            [ -n "$line" ] && echo "::error title=Gradle::${line//%/%%}"
+          done < errors.txt
+          exit 1
 
       - name: Collect and fingerprint the APK
         env:
