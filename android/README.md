@@ -66,6 +66,32 @@ gh run watch
 6. Copy `app/build/outputs/apk/debug/app-debug.apk` to your phone, install it (allow "install unknown
    apps" once).
 
+## What goes in `APP_URL`?
+
+`APP_URL` is **not** a link you look up — it is *the address where your copy of Quetex is published on
+the internet*, the same address you would open in a phone browser. If you have not published it
+anywhere yet, you have three choices:
+
+| Situation | What to do |
+|---|---|
+| **You have no host yet** | Leave the input empty. The APK asks for the address on first launch and remembers it — so you can rebuild/host later without a new APK. |
+| **You want a free permanent address** | Publish the repo with **GitHub Pages** (below) → `https://<your-user>.github.io/QuetexPro1M/` |
+| **You already host it** | Paste that address, e.g. `https://quetex.mydomain.com/` |
+
+`localhost:8080` **will not work inside the phone** — on a phone, "localhost" is the phone itself.
+It must be a public `https://` address (or a `http://` address on your own Wi-Fi, e.g. `http://192.168.0.5:8080`).
+
+### Publishing on GitHub Pages (free, ~1 minute)
+
+1. Repo → **Settings** → **Pages**.
+2. *Build and deployment* → Source: **Deploy from a branch**.
+3. Branch: `main` (or the branch you want to publish) · folder `/ (root)` → **Save**.
+4. Wait ~1 minute → your address is `https://<your-user>.github.io/QuetexPro1M/`.
+5. Open it in a computer browser to confirm, then put that exact address into the APK build input.
+
+The app is plain static files, so it needs no Node server on Pages. (Only the Android *share sheet*
+needs the server; on Pages you upload or use the Android capture app instead.)
+
 ## Use it
 
 1. Open the app → it loads Quetex in the WebView.
