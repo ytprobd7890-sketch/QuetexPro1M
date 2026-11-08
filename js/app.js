@@ -61,6 +61,7 @@ function boot() {
   ddChart = new LineChart($('dd-chart'), { color: '#ff5d6c', currency: '%', fill: true, baseline: 0 });
   mcChart = new HistogramChart($('mc-chart'));
 
+  registerServiceWorker();
   initEdge();
   buildOverlayToggles();
   buildStrategyUI();
@@ -70,7 +71,21 @@ function boot() {
   const s = sessionName(Date.now());
   $('session-pill').innerHTML = `Session <strong>${s.name}</strong> · ${s.quality}`;
 
+  const tabParam = new URLSearchParams(window.location.search).get('tab');
+  if (tabParam) {
+    document.querySelector(`.tab[data-tab="${tabParam}"]`)?.click();
+  }
+
   loadData();
+}
+
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('service-worker.js').catch((err) => {
+      console.warn('Service worker registration failed:', err?.message || err);
+    });
+  });
 }
 
 /* ------------------------------------------------------------------ */

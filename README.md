@@ -27,6 +27,8 @@ The default tab answers one question: **what does the next 1-minute candle do?**
 | **Live** | Binance 1m klines, polled every 4 s, countdown to the close | Any browser (falls back to a clearly-labelled demo tape if the venue is blocked) |
 | **Capture** | Screenshot of your broker chart → pixel analysis recovers the candles | Mobile ✅ · Desktop ✅ |
 | **Tab share** | `getDisplayMedia` grabs a frame of the broker tab | Desktop only — **mobile browsers do not implement it** |
+| **Share sheet** | Install the PWA, then Share any screenshot → Quetex 1M | Android ✅ (2 taps) |
+| **Camera / paste** | Rear camera or clipboard image | Everywhere |
 | **Paste** | `open,high,low,close` lines | Everywhere |
 
 The engine scores 14 scale-free features with a logistic regression trained walk-forward
@@ -35,7 +37,9 @@ trust factor** — a model that validated at coin-flip cannot shout. Under ~80 c
 a transparent rule blend and says so. It also shows the binary-options math live: breakeven hit rate,
 EV per trade, and a red warning when the bet is mathematically losing.
 
-📖 **বাংলায় সম্পূর্ণ গাইড: [`docs/1M-EDGE-BN.md`](docs/1M-EDGE-BN.md)**
+📖 **বাংলায় সম্পূর্ণ গাইড: [`docs/1M-EDGE-BN.md`](docs/1M-EDGE-BN.md)**  
+🔍 **Why iframes can't do this, and what a backend browser would really cost:
+[`docs/MOBILE-CAPTURE.md`](docs/MOBILE-CAPTURE.md)**
 
 ### 1. Terminal
 - Candlestick chart with EMA 20/50/200, session VWAP, Bollinger bands and Supertrend overlays,
@@ -178,7 +182,9 @@ exercise it against every timeframe.
 - The pixel reader needs **green/red candles with a visible gap between them**. White/blue candles,
   line charts and fully touching candles are rejected with a message instead of a guess.
 - Mobile browsers cannot capture a tab (`getDisplayMedia` is unavailable on Chrome Android and iOS
-  Safari). Use a screenshot — same pipeline, one extra tap.
+  Safari). Install the PWA and use the Android **share sheet**, or upload/paste — same pipeline.
+- An `<iframe>` around a broker page cannot work: the brokers block framing (`X-Frame-Options`/CSP)
+  and cross-origin frames expose neither DOM nor pixels. See `docs/MOBILE-CAPTURE.md`.
 - Backtests and probabilities are computed locally from the data you feed in. Nothing is sent
   anywhere, and no broker account is ever connected.
 

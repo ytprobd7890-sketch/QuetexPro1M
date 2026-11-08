@@ -6,11 +6,12 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node tests/smoke.mjs && node tests/capture.mjs && node tests/predictor.mjs && node tests/ui.mjs",
+    "test": "node tests/smoke.mjs && node tests/capture.mjs && node tests/predictor.mjs && node tests/pwa.mjs && node tests/ui.mjs",
     "test:engine": "node tests/smoke.mjs",
     "test:ui": "node tests/ui.mjs",
     "test:capture": "node tests/capture.mjs",
-    "test:predictor": "node tests/predictor.mjs"
+    "test:predictor": "node tests/predictor.mjs",
+    "test:pwa": "node tests/pwa.mjs"
   },
   "keywords": [
     "trading",

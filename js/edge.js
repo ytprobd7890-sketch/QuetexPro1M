@@ -34,6 +34,7 @@ const E = {
   stake: 10,
   payout: 85,
   session: { calls: 0, wins: 0, losses: 0, streak: 0, best: 0 },
+  installPrompt: null,
   cap: { src: null, crop: null, sens: 1, marks: [], result: null, stream: null, video: null, drag: null }
 };
 
@@ -75,7 +76,21 @@ export function initEdge() {
 
   $('share-tab').addEventListener('click', shareTab);
   $('upload-img').addEventListener('click', () => $('img-input').click());
+  $('camera-img').addEventListener('click', () => $('cam-input').click());
   $('img-input').addEventListener('change', onImagePicked);
+  $('cam-input').addEventListener('change', onImagePicked);
+  $('install-app').addEventListener('click', promptInstall);
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    E.installPrompt = e;
+    $('install-app').hidden = false;
+  });
+  document.addEventListener('paste', onPaste);
+
+  // iOS never fires beforeinstallprompt — show the button so the instructions
+  // are one tap away instead of buried in a menu.
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent || '');
+  if (isIOS && !window.navigator.standalone) $('install-app').hidden = false;
   $('sens').addEventListener('input', (e) => {
     E.cap.sens = Number(e.target.value);
     $('sens-val').textContent = E.cap.sens.toFixed(1);
@@ -87,6 +102,7 @@ export function initEdge() {
   bindCrop();
 
   startLive();
+  intakeShared();
   E.tickId = setInterval(renderCountdown, 250);
 
   const s = sessionName(Date.now());
@@ -456,23 +472,95 @@ function grabFrame() {
 
 function onImagePicked(e) {
   const file = e.target.files?.[0];
-  if (!file) return;
-  const url = URL.createObjectURL(file);
+  if (file) loadImageFile(file);
+  e.target.value = '';
+}
+
+/** Accepts a File or Blob from upload, camera, clipboard or the share sheet. */
+function loadImageFile(blob) {
+  if (!blob || !String(blob.type || '').startsWith('image/')) {
+    toast('That file is not an image.');
+    return;
+  }
+  const url = URL.createObjectURL(blob);
   const img = new Image();
   img.onload = () => {
     const maxW = 1400;
     const scale = Math.min(1, maxW / img.width);
-    const w = Math.round(img.width * scale);
-    const h = Math.round(img.height * scale);
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
     const off = document.createElement('canvas');
     off.width = w; off.height = h;
     off.getContext('2d').drawImage(img, 0, 0, w, h);
     setCaptureSource(off);
     URL.revokeObjectURL(url);
+    activateEdgeTab();
+    toast('Chart loaded — drag on the image to crop, then hit Analyse.');
   };
-  img.onerror = () => toast('That file could not be read as an image.');
+  img.onerror = () => {
+    URL.revokeObjectURL(url);
+    toast('That image could not be decoded.');
+  };
   img.src = url;
-  e.target.value = '';
+}
+
+function onPaste(e) {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type && item.type.startsWith('image/')) {
+      const file = item.getAsFile?.();
+      if (file) {
+        e.preventDefault();
+        loadImageFile(file);
+        activateEdgeTab();
+        toast('Image pasted from the clipboard.');
+        return;
+      }
+    }
+  }
+}
+
+function activateEdgeTab() {
+  const btn = document.querySelector('.tab[data-tab="edge"]');
+  if (btn && !btn.classList.contains('active')) btn.click();
+}
+
+async function promptInstall() {
+  if (!E.installPrompt) {
+    toast('Use your browser menu → “Add to Home screen” (or Share → Add to Home Screen on iOS).');
+    return;
+  }
+  E.installPrompt.prompt();
+  try { await E.installPrompt.userChoice; } catch { /* dismissed */ }
+  E.installPrompt = null;
+  $('install-app').hidden = true;
+}
+
+/**
+ * Reads the screenshot the Android share sheet handed to the service worker.
+ * Mobile browsers cannot capture a tab, so this is the phone-native path.
+ */
+async function intakeShared() {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has('shared')) return;
+  window.history.replaceState({}, '', window.location.pathname + window.location.hash);
+  if (!('caches' in window)) return;
+  try {
+    const cache = await caches.open('qp1m-share');
+    const res = await cache.match('/__shared-chart');
+    if (!res) {
+      toast('No shared image found — use Upload instead.');
+      return;
+    }
+    const blob = await res.blob();
+    await cache.delete('/__shared-chart');
+    loadImageFile(blob);
+    activateEdgeTab();
+    toast('Screenshot received from the share sheet.');
+  } catch {
+    toast('Could not read the shared image.');
+  }
 }
 
 function setCaptureSource(off) {

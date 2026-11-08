@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Quetex Pro 1M — Trading Analysis &amp; Strategy Terminal</title>
 <meta name="description" content="Quetex Pro 1M — 1-minute confluence analysis, signal engine, ATR risk model and event-driven backtester." />
+<meta name="theme-color" content="#05080c" />
+<meta name="color-scheme" content="dark" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="icons/icon-180.png" />
+<link rel="icon" type="image/png" href="icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Quetex 1M" />
 <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
@@ -140,11 +148,18 @@
             <strong>Mobile:</strong> screenshot your broker chart (Quotex, Pocket, TradingView…) and upload it.
             <strong>Desktop:</strong> share the browser tab and read it live.
           </p>
-          <div class="actions">
+          <div class="actions wrap">
             <button class="btn small" id="share-tab">Share tab</button>
             <button class="btn small ghost" id="upload-img">Upload</button>
+            <button class="btn small ghost" id="camera-img">Camera</button>
+            <button class="btn small ghost" id="install-app" hidden>Install app</button>
           </div>
           <input type="file" id="img-input" accept="image/*" hidden />
+          <input type="file" id="cam-input" accept="image/*" capture="environment" hidden />
+          <p class="micro" id="cap-hint">
+            Fastest on a phone: install the app once, then <strong>Share → Quetex 1M</strong> straight
+            from your screenshot gallery. No install? Upload works identically.
+          </p>
 
           <div class="cap-stage" id="cap-stage">
             <canvas id="cap-canvas"></canvas>

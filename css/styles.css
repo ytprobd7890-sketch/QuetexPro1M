@@ -521,6 +521,7 @@ table.sessions td:first-child { font-family: var(--mono); color: var(--muted); }
 }
 .mt8 { margin-top: 8px; }
 .actions.mt { margin-top: 10px; }
+.actions.wrap { flex-wrap: wrap; }
 
 .edge-grid {
   display: grid;

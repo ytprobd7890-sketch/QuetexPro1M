@@ -18,6 +18,7 @@ const MIME = {
   '.jpg': 'image/jpeg',
   '.ico': 'image/x-icon',
   '.md': 'text/markdown; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.csv': 'text/csv; charset=utf-8'
 };
 
@@ -26,6 +27,13 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     let rel = decodeURIComponent(url.pathname);
     if (rel === '/' || rel === '') rel = '/index.html';
+
+    // Fallback for the Web Share Target when the service worker is not active yet
+    // (first visit). The app then tells the user to upload instead.
+    if (req.method === 'POST' && rel === '/share-target') {
+      res.writeHead(303, { Location: '/?shared=1', 'Cache-Control': 'no-store' }).end();
+      return;
+    }
 
     // Prevent path traversal outside the project root
     const filePath = path.normalize(path.join(ROOT, rel));
