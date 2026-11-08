@@ -15,6 +15,11 @@ npm run test:deep # 269-check deep audit: reference math, invariants, fuzz, secu
 
 No build step, no framework, no charting library. Plain ES modules + canvas.
 
+**Android APK:** `Actions → Build Android APK → Run workflow` builds a signed, installable APK
+(`.github/workflows/android-apk.yml`, JDK 17 + SDK 34 + Gradle 8.7) and uploads it as an artifact —
+no local Android Studio needed. Tag `v1.0.0` also attaches it to a GitHub Release. Details:
+[`android/README.md`](android/README.md).
+
 ---
 
 ## What you get

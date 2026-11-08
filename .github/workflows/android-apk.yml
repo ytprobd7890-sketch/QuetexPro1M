@@ -1,0 +1,215 @@
+name: Build Android APK
+
+# One click → a signed, installable APK you can download from the run page.
+#
+#   Actions → "Build Android APK" → Run workflow
+#
+# Artifacts: "quetex-1m-apk-<run>" → app-debug.apk (+ .sha256)
+# Tag pushes (v1.0.0) additionally attach the APK to a GitHub Release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_url:
+        description: 'URL the APK opens by default (must be http:// or https://). Blank = repo variable APP_URL, else the placeholder.'
+        required: false
+        default: ''
+        type: string
+      build_type:
+        description: 'Gradle variant'
+        required: true
+        default: debug
+        type: choice
+        options:
+          - debug
+          - release
+
+  push:
+    branches:
+      - main
+      - 'arena/**'
+    paths:
+      - 'android/**'
+      - '.github/workflows/android-apk.yml'
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  # 1. Assemble the APK
+  # ─────────────────────────────────────────────────────────────
+  apk:
+    name: Assemble APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      VARIANT: ${{ inputs.build_type == 'release' && 'Release' || 'Debug' }}
+      VERSION_CODE: ${{ github.run_number }}
+      VERSION_NAME: 1.0.${{ github.run_number }}
+
+    defaults:
+      run:
+        working-directory: android
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        # Installs cmdline-tools and accepts the SDK licences; AGP then downloads
+        # platforms;android-34 and build-tools;34.0.0 on first use.
+
+      - name: Set up Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Resolve the app URL baked into the APK
+        id: cfg
+        env:
+          INPUT_URL: ${{ inputs.app_url }}
+          REPO_URL: ${{ vars.APP_URL }}
+        run: |
+          set -euo pipefail
+          url="${INPUT_URL:-}"
+          [ -n "$url" ] || url="${REPO_URL:-}"
+          [ -n "$url" ] || url="https://your-quetex-host.example/"
+          case "$url" in
+            http://*|https://*) ;;
+            *) echo "::error::APP_URL must start with http:// or https:// (got: $url)"; exit 1 ;;
+          esac
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Baking APP_URL = $url"
+
+      - name: Assemble ${{ env.VARIANT }}
+        env:
+          APP_URL_IN: ${{ steps.cfg.outputs.url }}
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --console=plain --stacktrace \
+            -PappUrl="$APP_URL_IN" \
+            -PversionCode="$VERSION_CODE" \
+            -PversionName="$VERSION_NAME" \
+            ":app:assemble${VARIANT}"
+
+      - name: Collect and fingerprint the APK
+        env:
+          APP_URL_IN: ${{ steps.cfg.outputs.url }}
+        run: |
+          set -euo pipefail
+          lower=$(printf '%s' "$VARIANT" | tr '[:upper:]' '[:lower:]')
+          src="app/build/outputs/apk/${lower}"
+          if ! ls "$src"/*.apk >/dev/null 2>&1; then
+            echo "::error::No APK found in $src"
+            find app/build/outputs -name '*.apk' || true
+            exit 1
+          fi
+          apk=$(ls "$src"/*.apk | head -1)
+          mkdir -p ../dist
+          out="../dist/QuetexPro1M-${VERSION_NAME}-${lower}.apk"
+          cp "$apk" "$out"
+          sha256sum "$out" | sed "s#  .*/#  #" > "$out.sha256"
+          {
+            echo "apk=$out"
+            echo "size=$(du -h "$out" | cut -f1)"
+            echo "sha=$(cut -d' ' -f1 "$out.sha256")"
+          } >> "$GITHUB_OUTPUT"
+          ls -lh ../dist
+        id: collect
+
+      - name: Verify the APK is a real, signed package
+        run: |
+          set -euo pipefail
+          apk="../dist/$(basename "${{ steps.collect.outputs.apk }}")"
+          bt=$(ls -d "$ANDROID_HOME"/build-tools/*/ 2>/dev/null | sort -V | tail -1 || true)
+          if [ -x "${bt}aapt" ]; then
+            "${bt}aapt" dump badging "$apk" | grep -E "^package:|^application-label|^sdkVersion|^targetSdkVersion" || true
+          fi
+          if [ -x "${bt}apksigner" ]; then
+            "${bt}apksigner" verify --print-certs "$apk" | head -5 || {
+              echo "::error::APK signature verification failed"; exit 1; }
+          else
+            echo "::warning::apksigner not found — skipping signature check"
+          fi
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: quetex-1m-apk-${{ github.run_number }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Attach to GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.apk
+            dist/*.sha256
+          generate_release_notes: true
+
+      - name: Job summary
+        if: always()
+        env:
+          APP_URL_IN: ${{ steps.cfg.outputs.url }}
+        run: |
+          {
+            echo "### Quetex 1M — APK"
+            echo ""
+            if [ -f "${{ steps.collect.outputs.apk }}" ]; then
+              echo "| | |"
+              echo "|---|---|"
+              echo "| File | \`$(basename "${{ steps.collect.outputs.apk }}")\` |"
+              echo "| Size | ${{ steps.collect.outputs.size }} |"
+              echo "| SHA-256 | \`${{ steps.collect.outputs.sha }}\` |"
+              echo "| Variant | $VARIANT |"
+              echo "| Version | $VERSION_NAME ($VERSION_CODE) |"
+              echo "| Baked URL | \`$APP_URL_IN\` |"
+              echo ""
+              echo "Download it from the **Artifacts** section of this run, then:"
+              echo "\`adb install -r app-debug.apk\` — or copy it to the phone and tap it."
+            else
+              echo "❌ No APK was produced — see the log above."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ─────────────────────────────────────────────────────────────
+  # 2. Guard the web app while we are here
+  # ─────────────────────────────────────────────────────────────
+  verify:
+    name: Node test suites
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: Test (6 suites)
+        run: npm test
+
+      - name: Deep audit (269 checks)
+        run: npm run test:deep

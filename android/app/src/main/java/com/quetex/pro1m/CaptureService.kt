@@ -162,48 +162,39 @@ class CaptureService : Service() {
 
     private fun captureFrame() {
         val image = reader?.acquireLatestImage() ?: return
-        var bitmap: Bitmap? = null
-        var scaled: Bitmap? = null
         try {
             val plane = image.planes[0]
             val pixelStride = plane.pixelStride
             val rowStride = plane.rowStride
             val rowPadding = rowStride - pixelStride * image.width
+            val paddedWidth = image.width + rowPadding / pixelStride
 
-            val padded = Bitmap.createBitmap(
-                image.width + rowPadding / pixelStride,
-                image.height,
-                Bitmap.Config.ARGB_8888
-            )
+            // The buffer is row-padded; copy it whole, then crop the padding away.
+            val padded = Bitmap.createBitmap(paddedWidth, image.height, Bitmap.Config.ARGB_8888)
             padded.copyPixelsFromBuffer(plane.buffer)
-            bitmap = if (rowPadding > 0) {
+            val cropped = if (paddedWidth != image.width) {
                 Bitmap.createBitmap(padded, 0, 0, image.width, image.height)
             } else {
                 padded
             }
-            if (bitmap !== padded) padded.recycle()
+            if (cropped !== padded) padded.recycle()
 
-            val scale = MAX_WIDTH.toFloat() / bitmap.width
-            scaled = if (scale < 1f) {
-                Bitmap.createScaledBitmap(
-                    bitmap,
-                    (bitmap.width * scale).toInt().coerceAtLeast(1),
-                    (bitmap.height * scale).toInt().coerceAtLeast(1),
-                    true
-                )
+            val scaled = if (cropped.width > MAX_WIDTH) {
+                val height = (cropped.height * MAX_WIDTH / cropped.width).coerceAtLeast(1)
+                Bitmap.createScaledBitmap(cropped, MAX_WIDTH, height, true)
             } else {
-                bitmap
+                cropped
             }
+            if (scaled !== cropped) cropped.recycle()
 
             val out = ByteArrayOutputStream()
             scaled.compress(Bitmap.CompressFormat.JPEG, 70, out)
-            val base64 = Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
-            val js = "window.QP && window.QP.onFrame('data:image/jpeg;base64,$base64');"
+            scaled.recycle()
 
+            val base64 = Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+            val js = "window.QP && window.QP.onFrame('data:image/jpeg;base64," + base64 + "');"
             webView?.post { webView?.evaluateJavascript(js, null) }
         } finally {
-            if (scaled != null && scaled !== bitmap) scaled.recycle()
-            bitmap?.recycle()
             image.close()
         }
     }

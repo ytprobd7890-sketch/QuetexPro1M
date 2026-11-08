@@ -2,3 +2,14 @@ node_modules/
 npm-debug.log*
 .DS_Store
 *.log
+
+# Android / Gradle local build output (CI builds these fresh)
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+*.apk
+*.aab
+*.jks
+*.keystore

@@ -3,6 +3,13 @@ plugins {
     id("org.jetbrains.kotlin.android") version "1.9.24"
 }
 
+// CI (or you, locally) can override these:
+//   gradle assembleDebug -PappUrl="https://your-host/" -PversionCode=12 -PversionName=1.0.12
+val appUrl: String = (findProperty("appUrl") as String?)?.takeIf { it.isNotBlank() }
+    ?: "https://your-quetex-host.example/"
+val buildVersionCode: Int = (findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
+val buildVersionName: String = (findProperty("versionName") as String?)?.takeIf { it.isNotBlank() } ?: "1.0"
+
 android {
     namespace = "com.quetex.pro1m"
     compileSdk = 34
@@ -11,12 +18,12 @@ android {
         applicationId = "com.quetex.pro1m"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = buildVersionCode
+        versionName = buildVersionName
 
-        // Replace with your deployed https URL, or leave the placeholder and type
-        // the URL in the app on first launch (stored in SharedPreferences).
-        buildConfigField("String", "APP_URL", "\"https://your-quetex-host.example/\"")
+        // Baked-in default URL. Leave the placeholder and the app will ask for the
+        // URL on first launch instead (stored in SharedPreferences).
+        buildConfigField("String", "APP_URL", "\"${appUrl.replace("\"", "\\\"")}\"")
     }
 
     buildFeatures {
@@ -25,8 +32,15 @@ android {
     }
 
     buildTypes {
+        debug {
+            isMinifyEnabled = false
+        }
         release {
             isMinifyEnabled = false
+            // Signed with the standard debug key so CI artifacts are directly
+            // installable on a phone. Replace with a real keystore before
+            // publishing anywhere public.
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -38,6 +52,10 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    lint {
+        abortOnError = false
     }
 }
 

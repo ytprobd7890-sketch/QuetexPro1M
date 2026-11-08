@@ -75,5 +75,31 @@ ok(edge.includes('onFrame'), 'window.QP.onFrame exists');
 ok(edge.includes('onNativeFrame') && edge.includes('img.src = dataUrl'),
    'accepts the data-URL frame the service sends');
 
+console.log('\n=== CI / APK workflow ===');
+const wfPath = path.join(root, '.github/workflows/android-apk.yml');
+ok(existsSync(wfPath), '.github/workflows/android-apk.yml exists');
+if (existsSync(wfPath)) {
+  const wf = readFileSync(wfPath, 'utf8');
+  ok(wf.includes('workflow_dispatch:'), 'manual "Run workflow" trigger');
+  ok(wf.includes("'android/**'"), 'auto-runs when android/ changes');
+  ok(wf.includes('actions/setup-java@v4') && wf.includes("java-version: '17'"), 'JDK 17 provisioned');
+  ok(wf.includes('android-actions/setup-android@v3'), 'Android SDK provisioned');
+  ok(wf.includes('gradle/actions/setup-gradle@v4'), 'Gradle provisioned');
+  ok(wf.includes(':app:assemble${VARIANT}'), 'runs :app:assemble<Variant>');
+  ok(wf.includes('-PappUrl='), 'APP_URL injected at build time');
+  ok(wf.includes("case \"$url\" in"), 'rejects a non-http(s) APP_URL');
+  ok(wf.includes('upload-artifact@v4'), 'APK uploaded as a downloadable artifact');
+  ok(wf.includes('apksigner'), 'APK signature verified in CI');
+  ok(wf.includes('softprops/action-gh-release'), 'tag pushes attach the APK to a release');
+  ok(wf.includes('npm test') && wf.includes('npm run test:deep'), 'web app regression job runs alongside');
+}
+ok(existsSync(A('gradle.properties')), 'gradle.properties exists');
+ok(read('gradle.properties').includes('android.useAndroidX=true'), 'android.useAndroidX=true (build fails without it)');
+ok(existsSync(A('app/proguard-rules.pro')), 'proguard-rules.pro exists (referenced by the release build)');
+ok(gradle.includes('proguard-rules.pro'), 'release build points at the proguard file');
+ok(gradle.includes('findProperty("appUrl")'), 'appUrl overridable with -PappUrl');
+ok(gradle.includes('findProperty("versionCode")'), 'versionCode overridable with -PversionCode');
+ok(gradle.includes('signingConfigs.getByName("debug")'), 'release APK is signed so it can be sideloaded');
+
 console.log(`\n${fails === 0 ? '✅ ANDROID PASSED' : `❌ ${fails} ANDROID CHECK(S) FAILED`}\n`);
 process.exit(fails === 0 ? 0 : 1);

@@ -14,20 +14,45 @@ MediaProjection ──► ImageReader ──► JPEG ──► base64 ──► 
 The WebView side is already wired: `window.QP.onFrame(dataUrl)` accepts a frame, applies your saved
 crop, reads the candles and refreshes the prediction.
 
-> ⚠️ **This folder is a reference implementation.** It was written and reviewed here but **not
-> compiled**, because this environment has no Android SDK. Expect to fix small build issues in
-> Android Studio. Everything outside this folder is tested (`npm test`).
+> ⚠️ This folder is not compiled in the sandbox that edits it (no Android SDK there). It **is**
+> compiled on GitHub: `.github/workflows/android-apk.yml` builds a signed APK on every push that
+> touches `android/`, and on demand.
 
 ---
 
-## Build it (one time, ~10 minutes)
+## Option A — let GitHub build it (no Android Studio, ~4 minutes)
+
+1. Open the repo → **Actions** → **Build Android APK** → **Run workflow**.
+2. Optional: paste your deployed **app URL** in the input box (must be `https://`). Leave it empty to
+   use the repository variable `APP_URL`; if that is unset, the APK asks for the URL on first launch
+   instead — so an empty run still gives you a usable app.
+3. When the run goes green, open it → **Artifacts** → `quetex-1m-apk-<n>` → download the zip, unzip,
+   get `QuetexPro1M-1.0.<n>-debug.apk` (+ `.sha256`).
+4. Copy it to the phone and tap it (allow "install unknown apps" once), or `adb install -r <file>.apk`.
+
+**Set the URL once for every future build:** repo → Settings → Secrets and variables → Actions →
+Variables → New variable `APP_URL` = `https://your-host/`. Every subsequent run bakes it in.
+
+Tagging `v1.0.0` builds the same APK and attaches it to a GitHub Release automatically.
+
+| Workflow detail | Value |
+|---|---|
+| Runner | `ubuntu-latest`, JDK 17, Gradle 8.7, Android SDK 34 |
+| Variants | `debug` (default) and `release` (minify off, signed with the debug key so it installs) |
+| Version | `1.0.<run number>` — always increasing, so re-installing over an old build works |
+| Checks | `aapt dump badging` + `apksigner verify` before upload |
+| Also runs | `npm test` (6 suites) and `npm run test:deep` in a parallel job |
+
+---
+
+## Option B — build it locally (one time, ~10 minutes)
 
 1. Install **Android Studio** (Hedgehog or newer) with JDK 17 and SDK 34.
 2. `File → Open…` → choose this `android/` folder.
 3. Let Gradle sync.
-4. Set your deployed app URL — either edit `APP_URL` in `app/build.gradle.kts`, or just launch the app
-   and type the URL when it asks (it is stored in `SharedPreferences`, so you only do it once).
-   It must be **https**.
+4. Set your deployed app URL — either pass `-PappUrl="https://your-host/"` on the Gradle command line,
+   edit the default in `app/build.gradle.kts`, or just launch the app and type the URL when it asks
+   (it is stored in `SharedPreferences`, so you only do it once). It must be **https**.
 5. `Build → Build Bundle(s)/APK(s) → Build APK(s)`.
 6. Copy `app/build/outputs/apk/debug/app-debug.apk` to your phone, install it (allow "install unknown
    apps" once).
@@ -51,7 +76,10 @@ The first time, drag once on the captured image to crop the candle area — Quet
 | `app/src/main/java/com/quetex/pro1m/MainActivity.kt` | WebView, URL settings, capture permission, service start/stop |
 | `app/src/main/java/com/quetex/pro1m/CaptureService.kt` | Foreground service: MediaProjection → ImageReader → JPEG → base64 → JS |
 | `app/src/main/AndroidManifest.xml` | permissions + service declaration |
-| `app/build.gradle.kts` | `APP_URL` build config, SDK levels, dependencies |
+| `app/build.gradle.kts` | `APP_URL` / version build config, SDK levels, signing, dependencies |
+| `gradle.properties` | `android.useAndroidX=true` and JVM settings (required for the build) |
+| `app/proguard-rules.pro` | placeholder keep-rules for the release variant |
+| `../.github/workflows/android-apk.yml` | CI: builds + signs + uploads the APK, attaches it to tag releases |
 
 ## Rules this app must respect
 
@@ -74,3 +102,5 @@ The first time, drag once on the captured image to crop the candle area — Quet
 - Frames are JPEG-compressed at quality 70 and capped at 1280 px wide — plenty for candle reading,
   small enough to inject through the JS bridge.
 - This shell does not trade, log in, or store credentials. It only reads pixels.
+- The APK produced by CI is signed with the standard **debug** keystore so it installs anywhere.
+  That is fine for your own phone; it is not a Play Store upload key.
