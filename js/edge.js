@@ -35,7 +35,10 @@ const E = {
   payout: 85,
   session: { calls: 0, wins: 0, losses: 0, streak: 0, best: 0 },
   installPrompt: null,
-  cap: { src: null, crop: null, sens: 1, marks: [], result: null, stream: null, video: null, drag: null }
+  cap: {
+    src: null, crop: null, dims: null, sens: 1, marks: [], result: null,
+    stream: null, video: null, drag: null, autoId: null, autoAnalyze: true
+  }
 };
 
 let booted = false;
@@ -96,7 +99,12 @@ export function initEdge() {
     $('sens-val').textContent = E.cap.sens.toFixed(1);
     if (E.cap.src) analyzeCapture();
   });
-  $('cap-analyze').addEventListener('click', useCapturedChart);
+  $('cap-analyze').addEventListener('click', () => useCapturedChart());
+  $('clear-crop').addEventListener('click', clearSavedCrop);
+  $('auto-capture').addEventListener('change', (e) => {
+    if (e.target.checked) startAutoCapture();
+    else stopAutoCapture();
+  });
   $('manual-apply').addEventListener('click', applyManual);
 
   bindCrop();
@@ -422,7 +430,11 @@ function bindCrop() {
     E.cap.drag = null;
     const x = Math.min(d.x0, d.x1), y = Math.min(d.y0, d.y1);
     const w = Math.abs(d.x1 - d.x0), h = Math.abs(d.y1 - d.y0);
-    if (w > 30 && h > 30) E.cap.crop = { x, y, w, h };
+    if (w > 30 && h > 30) {
+      E.cap.crop = { x, y, w, h };
+      saveCrop(E.cap.crop, E.cap.dims);
+      E.cap.autoAnalyze = true;
+    }
     analyzeCapture();
   });
   cv.addEventListener('pointercancel', () => { E.cap.drag = null; drawCapture(); });
@@ -445,8 +457,15 @@ async function shareTab() {
     await new Promise((r) => setTimeout(r, 450));
     E.cap.video = video;
     grabFrame();
-    stream.getVideoTracks()[0].addEventListener('ended', () => { E.cap.stream = null; E.cap.video = null; });
-    toast('Tab captured. Drag on the image to crop the candle area.');
+    $('auto-row').hidden = false;
+    stream.getVideoTracks()[0].addEventListener('ended', () => {
+      E.cap.stream = null;
+      E.cap.video = null;
+      stopAutoCapture();
+      $('auto-row').hidden = true;
+      $('auto-capture').checked = false;
+    });
+    toast('Tab captured. Drag once to crop the candles — after that it re-reads by itself.');
   } catch (err) {
     const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     toast(
@@ -457,7 +476,7 @@ async function shareTab() {
   }
 }
 
-function grabFrame() {
+function grabFrame(keepCrop = false) {
   const v = E.cap.video;
   if (!v || !v.videoWidth) return;
   const maxW = 1400;
@@ -467,7 +486,58 @@ function grabFrame() {
   const off = document.createElement('canvas');
   off.width = w; off.height = h;
   off.getContext('2d').drawImage(v, 0, 0, w, h);
-  setCaptureSource(off);
+  setCaptureSource(off, keepCrop);
+}
+
+/* ----------------------- continuous capture ------------------------- */
+
+function startAutoCapture() {
+  stopAutoCapture();
+  if (!E.cap.stream) {
+    $('auto-capture').checked = false;
+    toast('Share a browser tab first — auto-capture needs a live stream.');
+    return;
+  }
+  if (!loadSavedCrop(1, 1) && E.cap.crop && E.cap.crop.w >= (E.cap.dims?.w || 1) * 0.98) {
+    toast('Crop the candle area once — then auto-capture will keep re-reading it.');
+  }
+  E.cap.autoId = setInterval(() => grabFrame(true), 6000);
+  $('auto-row').classList.add('on');
+  toast('Auto-capture on: the chart is re-read every 6 seconds.');
+}
+
+function stopAutoCapture() {
+  if (E.cap.autoId) { clearInterval(E.cap.autoId); E.cap.autoId = null; }
+  $('auto-row').classList.remove('on');
+}
+
+function saveCrop(crop, dims) {
+  if (!dims || !crop) return;
+  try {
+    window.localStorage.setItem('qp1m.crop', JSON.stringify({
+      x: crop.x / dims.w, y: crop.y / dims.h,
+      w: crop.w / dims.w, h: crop.h / dims.h
+    }));
+  } catch { /* private mode */ }
+}
+
+function loadSavedCrop(w, h) {
+  try {
+    const raw = window.localStorage.getItem('qp1m.crop');
+    if (!raw) return null;
+    const j = JSON.parse(raw);
+    if (![j.x, j.y, j.w, j.h].every(Number.isFinite)) return null;
+    return { x: j.x * w, y: j.y * h, w: j.w * w, h: j.h * h };
+  } catch {
+    return null;
+  }
+}
+
+function clearSavedCrop() {
+  try { window.localStorage.removeItem('qp1m.crop'); } catch { /* ignore */ }
+  if (E.cap.dims) E.cap.crop = { x: 0, y: 0, w: E.cap.dims.w, h: E.cap.dims.h };
+  if (E.cap.src) analyzeCapture();
+  toast('Saved crop cleared — drag on the image to pick the candle area again.');
 }
 
 function onImagePicked(e) {
@@ -563,16 +633,34 @@ async function intakeShared() {
   }
 }
 
-function setCaptureSource(off) {
+function setCaptureSource(off, keepCrop = false) {
+  const prev = E.cap.crop;
+  const prevDims = E.cap.dims;
+  const sx = prevDims ? off.width / prevDims.w : 1;
+  const sy = prevDims ? off.height / prevDims.h : 1;
+
+  const crop = keepCrop && prev && prevDims
+    ? { x: prev.x * sx, y: prev.y * sy, w: prev.w * sx, h: prev.h * sy }
+    : loadSavedCrop(off.width, off.height);
+
   E.cap.src = off;
-  E.cap.crop = { x: 0, y: 0, w: off.width, h: off.height };
+  E.cap.dims = { w: off.width, h: off.height };
+  E.cap.crop = crop || { x: 0, y: 0, w: off.width, h: off.height };
   E.cap.marks = [];
+
   const cv = $('cap-canvas');
   cv.width = off.width;
   cv.height = off.height;
   cv.classList.add('on');
   $('cap-empty').style.display = 'none';
   analyzeCapture();
+
+  // Known crop → predict straight away. This is what removes the
+  // "crop + click Analyse" step from every later share.
+  if (crop && E.cap.autoAnalyze && E.cap.result && E.cap.result.candles.length >= 8) {
+    useCapturedChart({ silent: true });
+    $('cap-status').textContent = 'auto';
+  }
 }
 
 function analyzeCapture() {
@@ -626,7 +714,8 @@ function drawCapture() {
   }
 }
 
-function useCapturedChart() {
+function useCapturedChart(opts = {}) {
+  const silent = Boolean(opts && opts.silent === true);
   const res = E.cap.result;
   if (!res || res.candles.length < 8) {
     toast('No candles detected. Crop tighter on the candle area and raise sensitivity.');
@@ -646,8 +735,10 @@ function useCapturedChart() {
   $('cd-fill').style.width = '0%';
   renderPrediction();
   renderSession();
-  revealPrediction();
-  toast(`${res.meta.detected} candles read from the image.`);
+  if (!silent) {
+    revealPrediction();
+    toast(`${res.meta.detected} candles read from the image.`);
+  }
 }
 
 function applyManual() {
@@ -677,6 +768,40 @@ function revealPrediction() {
   const card = document.querySelector('#tab-edge .pred-card');
   if (card) setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
 }
+
+/* ------------------------------------------------------------------ */
+/* native bridge (Android wrapper / any host app)                      */
+/* ------------------------------------------------------------------ */
+
+function onNativeFrame(dataUrl) {
+  const img = new Image();
+  img.onload = () => {
+    const off = document.createElement('canvas');
+    off.width = img.width;
+    off.height = img.height;
+    off.getContext('2d').drawImage(img, 0, 0);
+    setCaptureSource(off, true);
+    if (E.cap.autoAnalyze) useCapturedChart({ silent: true });
+    activateEdgeTab();
+  };
+  img.onerror = () => console.warn('QP.onFrame: could not decode frame');
+  img.src = dataUrl;
+}
+
+window.QP = {
+  version: '1.0',
+  onFrame: onNativeFrame,
+  analyze: () => useCapturedChart({ silent: true }),
+  setSymbol: (sym) => {
+    if (!SYMBOLS.some((s) => s.id === sym)) return false;
+    E.symbol = sym;
+    $('edge-symbol').value = sym;
+    startLive();
+    return true;
+  },
+  startAuto: () => startAutoCapture(),
+  stopAuto: () => stopAutoCapture()
+};
 
 /* ------------------------------------------------------------------ */
 /* toast                                                               */

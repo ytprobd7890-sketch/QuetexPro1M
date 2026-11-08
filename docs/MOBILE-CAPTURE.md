@@ -87,7 +87,39 @@ mobile — in which case host the proxy somewhere legal for you, and never put a
 
 ---
 
-## 3. What is actually shipped (works today)
+## 3. Killing the "screenshot every minute" loop
+
+Three levels, cheapest first:
+
+| Level | What you do per minute | Where |
+|---|---|---|
+| **Live** | nothing | any browser, BTC/ETH/SOL/BNB |
+| **Auto-capture (desktop)** | nothing — share the tab once | desktop Chrome/Edge |
+| **Android shell** | nothing — grant capture once | Android (build the APK, see `android/`) |
+| Share sheet | 2 taps | Android |
+| Upload | 3–4 taps | everywhere |
+
+**Saved crop.** The first time you crop the candle area, the app stores that rectangle
+(normalised, in `localStorage`). Every later screenshot is cropped the same way and analysed
+automatically — the share flow becomes *Share → prediction*, with no dragging and no button.
+
+**Auto-capture (desktop).** After `Share tab`, tick **Auto-capture every 6 s**. The service keeps
+the stream open, grabs a frame, reads the candles and refreshes the prediction without any clicking.
+Stop sharing and it stops.
+
+**Android shell.** The only zero-touch path on a phone. `android/` contains a ~250-line app that
+mirrors the screen with `MediaProjection` and pushes a JPEG into the web app every 6 seconds:
+
+```
+MediaProjection → ImageReader → JPEG → base64 → window.QP.onFrame() → capture.js → predictor.js
+```
+
+Build it once in Android Studio (see `android/README.md`), install it, tap **Start capture**, switch
+to your broker chart. After that, nothing else to do.
+
+---
+
+## 4. What is actually shipped (works today)
 
 | Method | Phone | Desktop | Status |
 |---|---|---|---|
@@ -95,8 +127,9 @@ mobile — in which case host the proxy somewhere legal for you, and never put a
 | **Upload** — pick any screenshot | ✅ | ✅ | **done** |
 | **Camera** — photograph another screen / tablet | ✅ | ✅ | **done** |
 | **Paste** — copy an image, paste into the app | most Chromium builds | ✅ | **done** |
-| **Tab share** — `getDisplayMedia` | ❌ API absent | ✅ | **done** |
+| **Tab share + auto-capture** — `getDisplayMedia`, re-read every 6 s | ❌ API absent | ✅ | **done** |
 | **Manual paste** — `open,high,low,close` rows | ✅ | ✅ | **done** |
+| **Android shell** — MediaProjection, zero touch (`android/`) | ✅ (build APK) | — | source provided |
 | iframe | ❌ | ❌ | impossible (see §1) |
 | Backend browser | ⚠️ | ⚠️ | deliberately not built (see §2) |
 
@@ -121,7 +154,7 @@ Safari supports PWAs ("Add to Home Screen") but **not** the Web Share Target API
 
 ---
 
-## 4. The only true screen capture on a phone: a native app
+## 5. The only true screen capture on a phone: a native app
 
 Android exposes `MediaProjection` (Screen Capture API). It requires:
 
@@ -135,7 +168,7 @@ is a native-app project, not a web one.
 
 ---
 
-## 5. Recommendation
+## 6. Recommendation
 
 1. **Today:** install the PWA, use Share → Quetex on Android, Upload everywhere else.
 2. **If you must automate on a phone:** build the native Android screen-capture client and post frames

@@ -136,3 +136,12 @@ for (const size of [180, 192, 512]) {
   writeFileSync(path, png);
   console.log(`icons/icon-${size}.png  ${(png.length / 1024).toFixed(1)} KB`);
 }
+
+// Android launcher densities
+const mipmaps = { mdpi: 48, hdpi: 72, xhdpi: 96, xxhdpi: 144, xxxhdpi: 192 };
+for (const [density, size] of Object.entries(mipmaps)) {
+  const dir = new URL(`../android/app/src/main/res/mipmap-${density}/`, import.meta.url);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(new URL('ic_launcher.png', dir), render(size));
+  console.log(`android mipmap-${density}/ic_launcher.png (${size}px)`);
+}

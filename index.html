@@ -160,6 +160,11 @@
             Fastest on a phone: install the app once, then <strong>Share → Quetex 1M</strong> straight
             from your screenshot gallery. No install? Upload works identically.
           </p>
+          <p class="micro live-hint">
+            <strong>Zero screenshots:</strong> pick <b>BTC / ETH / SOL / BNB</b> in the symbol box above —
+            <b>LIVE</b> mode refreshes itself every minute. The capture path is only for brokers whose
+            chart you cannot get as data.
+          </p>
 
           <div class="cap-stage" id="cap-stage">
             <canvas id="cap-canvas"></canvas>
@@ -172,7 +177,12 @@
               <input type="range" id="sens" min="0.4" max="2.4" step="0.1" value="1" />
             </label>
             <div class="cap-meta" id="cap-meta">—</div>
+            <label class="auto-row" id="auto-row" hidden>
+              <input type="checkbox" id="auto-capture" />
+              <span>Auto-capture every 6s <small>— keep the shared tab open, no clicking</small></span>
+            </label>
             <button class="btn primary wide" id="cap-analyze" disabled>Analyse chart → next candle</button>
+            <button class="link-btn" id="clear-crop">Reset saved crop</button>
           </div>
 
           <details class="cap-manual">

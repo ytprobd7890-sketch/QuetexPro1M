@@ -27,7 +27,8 @@ The default tab answers one question: **what does the next 1-minute candle do?**
 | **Live** | Binance 1m klines, polled every 4 s, countdown to the close | Any browser (falls back to a clearly-labelled demo tape if the venue is blocked) |
 | **Capture** | Screenshot of your broker chart → pixel analysis recovers the candles | Mobile ✅ · Desktop ✅ |
 | **Tab share** | `getDisplayMedia` grabs a frame of the broker tab | Desktop only — **mobile browsers do not implement it** |
-| **Share sheet** | Install the PWA, then Share any screenshot → Quetex 1M | Android ✅ (2 taps) |
+| **Share sheet** | Install the PWA, then Share any screenshot → Quetex 1M | Android ✅ (2 taps, crop remembered) |
+| **Auto-capture** | Desktop: share the tab once, frames re-read every 6 s | Desktop ✅ · Android via `android/` shell |
 | **Camera / paste** | Rear camera or clipboard image | Everywhere |
 | **Paste** | `open,high,low,close` lines | Everywhere |
 
@@ -146,12 +147,14 @@ js/backtest.js        event-driven engine, metrics, Monte Carlo
 js/chart.js           canvas candlestick, line and histogram renderers
 js/predictor.js       next-candle engine (logistic + rule blend + binary EV)
 js/capture.js         screenshot → OHLC pixel reader
-js/edge.js            1M Edge tab controller (live feed, capture, session log)
+js/edge.js            1M Edge tab controller (live feed, capture, auto-capture, session log)
 tests/smoke.mjs       data / indicator / strategy / backtest assertions
 tests/capture.mjs     candle extraction from synthetic screenshots
 tests/predictor.mjs   next-candle engine, look-ahead and EV math
+tests/android.mjs     Android shell wiring (manifest, service, resources, bridge)
 tests/ui.mjs          full DOM boot inside jsdom
 docs/PLAYBOOK.md      the desk manual
+android/              MediaProjection capture shell (Kotlin, build with Android Studio)
 server.js             static server (0.0.0.0, no dependencies)
 ```
 

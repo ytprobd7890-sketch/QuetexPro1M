@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Quetex 1M</string>
+    <string name="start_capture">Start capture</string>
+    <string name="stop_capture">Stop capture</string>
+    <string name="capture_started">Screen capture started — switch to your broker chart.</string>
+    <string name="capture_denied">Capture cancelled.</string>
+    <string name="url_title">Quetex app URL</string>
+    <string name="url_message">Where is the terminal hosted? It must be https:// and reachable from this phone.</string>
+    <string name="load">Load</string>
+    <string name="url_invalid">Enter a full http(s):// URL</string>
+    <string name="notif_title">Quetex is reading your chart</string>
+    <string name="notif_text">Frames every 6 s · tap to return</string>
+</resources>

@@ -730,3 +730,40 @@ table.sessions td:first-child { font-family: var(--mono); color: var(--muted); }
   z-index: 200;
 }
 .qp-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* auto capture row */
+.auto-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  padding: 7px 9px;
+  border: 1px solid rgba(46, 230, 168, 0.28);
+  border-radius: 8px;
+  background: rgba(46, 230, 168, 0.05);
+  cursor: pointer;
+}
+.auto-row input { accent-color: var(--up); width: 15px; height: 15px; }
+.auto-row small { color: var(--muted-2); }
+.auto-row.on { border-color: rgba(46, 230, 168, 0.6); background: rgba(46, 230, 168, 0.1); color: var(--text); }
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--muted-2);
+  font-size: 10px;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  align-self: flex-start;
+}
+.link-btn:hover { color: var(--muted); }
+
+.live-hint {
+  border: 1px solid rgba(79, 179, 255, 0.28);
+  background: rgba(79, 179, 255, 0.06);
+  border-radius: 8px;
+  padding: 7px 9px;
+}
+.live-hint strong { color: var(--blue); }
