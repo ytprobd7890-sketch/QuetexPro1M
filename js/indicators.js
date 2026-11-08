@@ -42,6 +42,13 @@ export function ema(src, period) {
   return out;
 }
 
+/** RSI from average gain/loss. No movement at all = neutral 50, not overbought 100. */
+function rsiFrom(gain, loss) {
+  if (gain + loss === 0) return 50;
+  if (loss === 0) return 100;
+  return 100 - 100 / (1 + gain / loss);
+}
+
 /** Wilder's RSI. */
 export function rsi(src, period = 14) {
   const out = new Array(src.length).fill(NaN);
@@ -54,12 +61,12 @@ export function rsi(src, period = 14) {
       gain += up; loss += dn;
       if (i === period) {
         gain /= period; loss /= period;
-        out[i] = loss === 0 ? 100 : 100 - 100 / (1 + gain / loss);
+        out[i] = rsiFrom(gain, loss);
       }
     } else {
       gain = (gain * (period - 1) + up) / period;
       loss = (loss * (period - 1) + dn) / period;
-      out[i] = loss === 0 ? 100 : 100 - 100 / (1 + gain / loss);
+      out[i] = rsiFrom(gain, loss);
     }
   }
   return out;

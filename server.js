@@ -35,10 +35,14 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // Prevent path traversal outside the project root
+    // Path containment: resolve, then require the result to stay inside ROOT.
+    // A plain startsWith() would also accept siblings like "<ROOT>-secret".
     const filePath = path.normalize(path.join(ROOT, rel));
-    if (!filePath.startsWith(ROOT)) {
-      res.writeHead(403).end('Forbidden');
+    const relToRoot = path.relative(ROOT, filePath);
+    const escapes = relToRoot.startsWith('..') || path.isAbsolute(relToRoot);
+    const hidden = relToRoot.split(path.sep).some((seg) => seg.startsWith('.') || seg === 'node_modules');
+    if (escapes || hidden) {
+      res.writeHead(403, { 'Content-Type': 'text/plain' }).end('Forbidden');
       return;
     }
 

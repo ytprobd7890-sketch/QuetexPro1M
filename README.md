@@ -9,7 +9,8 @@ everything testable is in this repository.
 
 ```
 npm start        # → http://localhost:8080
-npm test         # headless engine + UI smoke tests
+npm test         # 6 suites: engine, capture, predictor, PWA, Android, UI smoke
+npm run test:deep # 269-check deep audit: reference math, invariants, fuzz, security, perf
 ```
 
 No build step, no framework, no charting library. Plain ES modules + canvas.
@@ -152,6 +153,8 @@ tests/smoke.mjs       data / indicator / strategy / backtest assertions
 tests/capture.mjs     candle extraction from synthetic screenshots
 tests/predictor.mjs   next-candle engine, look-ahead and EV math
 tests/android.mjs     Android shell wiring (manifest, service, resources, bridge)
+tests/pwa.mjs         manifest, service worker, share-target, icons
+tests/deep.mjs        deep audit: indicators vs naive refs, backtest invariants, CSV fuzz, server security
 tests/ui.mjs          full DOM boot inside jsdom
 docs/PLAYBOOK.md      the desk manual
 android/              MediaProjection capture shell (Kotlin, build with Android Studio)

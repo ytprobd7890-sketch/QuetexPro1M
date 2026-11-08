@@ -244,15 +244,28 @@ export function parseCsv(text, { symbolId = 'CUSTOM', timeframe = '15m' } = {}) 
   for (let r = 1; r < lines.length; r++) {
     const cells = lines[r].split(delim).map((c) => c.trim().replace(/^"|"$/g, ''));
     const num = (i) => (i >= 0 ? Number(cells[i]) : 0);
-    if (!Number.isFinite(num(iO))) continue;
+
+    const o = num(iO), h = num(iH), l = num(iL), c = num(iC);
+    // Blank cells become 0 — a zero or negative price would poison every
+    // indicator downstream, so drop the row instead of "fixing" it.
+    if (![o, h, l, c].every((v) => Number.isFinite(v) && v > 0)) continue;
 
     let t = cells[iT];
     const asNum = Number(t);
-    if (Number.isFinite(asNum)) t = asNum > 1e11 ? asNum : asNum * 1000;
+    if (Number.isFinite(asNum) && asNum > 0) t = asNum > 1e11 ? asNum : asNum * 1000;
     else t = Date.parse(t);
 
-    if (!Number.isFinite(t)) continue;
-    candles.push({ t, o: num(iO), h: num(iH), l: num(iL), c: num(iC), v: iV >= 0 ? num(iV) : 0 });
+    if (!Number.isFinite(t) || t <= 0) continue;
+
+    const volume = iV >= 0 ? num(iV) : 0;
+    candles.push({
+      t,
+      o,
+      h: Math.max(o, h, l, c),
+      l: Math.min(o, h, l, c),
+      c,
+      v: Number.isFinite(volume) && volume > 0 ? volume : 0
+    });
   }
   candles.sort((a, b) => a.t - b.t);
   if (candles.length < 50) throw new Error('CSV produced fewer than 50 valid candles');
