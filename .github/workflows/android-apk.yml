@@ -69,10 +69,22 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        # Installs cmdline-tools and accepts the SDK licences; AGP then downloads
-        # platforms;android-34 and build-tools;34.0.0 on first use.
+      - name: Locate the Android SDK
+        # ubuntu-latest already ships cmdline-tools, build-tools and platforms;android-34
+        # with the licences accepted, so we only need to point Gradle at it (and
+        # install platform 34 in the unlikely case the image ever drops it).
+        run: |
+          set -euo pipefail
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_HOME=$sdk"     >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$sdk" >> "$GITHUB_ENV"
+          ls "$sdk" || true
+          if [ ! -d "$sdk/platforms/android-34" ]; then
+            "$sdk/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$sdk" \
+              "platforms;android-34" </dev/null
+          fi
+          echo "platforms: $(ls "$sdk/platforms" | tr '\n' ' ')"
+          echo "build-tools: $(ls "$sdk/build-tools" | tr '\n' ' ')"
 
       - name: Set up Gradle 8.7
         uses: gradle/actions/setup-gradle@v4

@@ -83,7 +83,7 @@ if (existsSync(wfPath)) {
   ok(wf.includes('workflow_dispatch:'), 'manual "Run workflow" trigger');
   ok(wf.includes("'android/**'"), 'auto-runs when android/ changes');
   ok(wf.includes('actions/setup-java@v4') && wf.includes("java-version: '17'"), 'JDK 17 provisioned');
-  ok(wf.includes('android-actions/setup-android@v3'), 'Android SDK provisioned');
+  ok(wf.includes('ANDROID_HOME') && wf.includes('platforms;android-34'), 'Android SDK located/provisioned in CI');
   ok(wf.includes('gradle/actions/setup-gradle@v4'), 'Gradle provisioned');
   ok(wf.includes(':app:assemble${VARIANT}'), 'runs :app:assemble<Variant>');
   ok(wf.includes('-PappUrl='), 'APP_URL injected at build time');
