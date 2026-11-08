@@ -18,6 +18,25 @@ No build step, no framework, no charting library. Plain ES modules + canvas.
 
 ## What you get
 
+### 0. 1M Edge — next-candle engine (mobile first)
+
+The default tab answers one question: **what does the next 1-minute candle do?**
+
+| Input | How | Where it works |
+|---|---|---|
+| **Live** | Binance 1m klines, polled every 4 s, countdown to the close | Any browser (falls back to a clearly-labelled demo tape if the venue is blocked) |
+| **Capture** | Screenshot of your broker chart → pixel analysis recovers the candles | Mobile ✅ · Desktop ✅ |
+| **Tab share** | `getDisplayMedia` grabs a frame of the broker tab | Desktop only — **mobile browsers do not implement it** |
+| **Paste** | `open,high,low,close` lines | Everywhere |
+
+The engine scores 14 scale-free features with a logistic regression trained walk-forward
+(70% train / 30% out-of-sample holdout), then **shrinks the prediction toward 50% by the measured
+trust factor** — a model that validated at coin-flip cannot shout. Under ~80 candles it falls back to
+a transparent rule blend and says so. It also shows the binary-options math live: breakeven hit rate,
+EV per trade, and a red warning when the bet is mathematically losing.
+
+📖 **বাংলায় সম্পূর্ণ গাইড: [`docs/1M-EDGE-BN.md`](docs/1M-EDGE-BN.md)**
+
 ### 1. Terminal
 - Candlestick chart with EMA 20/50/200, session VWAP, Bollinger bands and Supertrend overlays,
   volume, and an RSI or MACD sub-pane. Scroll to zoom, drag to pan, crosshair with OHLC readout.
@@ -121,7 +140,12 @@ js/indicators.js      SMA, EMA, RSI, ATR, MACD, Bollinger, Donchian, VWAP, Super
 js/strategy.js        six strategies + weighted confluence engine
 js/backtest.js        event-driven engine, metrics, Monte Carlo
 js/chart.js           canvas candlestick, line and histogram renderers
+js/predictor.js       next-candle engine (logistic + rule blend + binary EV)
+js/capture.js         screenshot → OHLC pixel reader
+js/edge.js            1M Edge tab controller (live feed, capture, session log)
 tests/smoke.mjs       data / indicator / strategy / backtest assertions
+tests/capture.mjs     candle extraction from synthetic screenshots
+tests/predictor.mjs   next-candle engine, look-ahead and EV math
 tests/ui.mjs          full DOM boot inside jsdom
 docs/PLAYBOOK.md      the desk manual
 server.js             static server (0.0.0.0, no dependencies)
@@ -147,6 +171,16 @@ It appears in the selector, the backtester and the playbook automatically — an
 exercise it against every timeframe.
 
 ---
+
+## Honest limits of the 1-minute engine
+
+- A one-minute candle is close to a coin flip. Any edge is thin, regime-dependent and can vanish.
+- The pixel reader needs **green/red candles with a visible gap between them**. White/blue candles,
+  line charts and fully touching candles are rejected with a message instead of a guess.
+- Mobile browsers cannot capture a tab (`getDisplayMedia` is unavailable on Chrome Android and iOS
+  Safari). Use a screenshot — same pipeline, one extra tap.
+- Backtests and probabilities are computed locally from the data you feed in. Nothing is sent
+  anywhere, and no broker account is ever connected.
 
 ## Disclaimer
 

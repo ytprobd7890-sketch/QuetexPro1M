@@ -57,7 +57,8 @@
 </header>
 
 <nav class="tabs" role="tablist">
-  <button class="tab active" data-tab="chart" role="tab">Terminal</button>
+  <button class="tab active" data-tab="edge" role="tab">1M Edge</button>
+  <button class="tab" data-tab="chart" role="tab">Terminal</button>
   <button class="tab" data-tab="backtest" role="tab">Backtest Lab</button>
   <button class="tab" data-tab="playbook" role="tab">Strategy Playbook</button>
   <div class="tab-spacer"></div>
@@ -65,8 +66,120 @@
 </nav>
 
 <main>
+  <!-- ============================ 1M EDGE ============================ -->
+  <section class="panel active" id="tab-edge">
+    <div class="edge-grid">
+      <div class="edge-col">
+        <div class="card pred-card">
+          <div class="card-head">
+            <div class="eyebrow">Next-candle engine · 1 minute</div>
+            <div class="edge-head-right">
+              <select id="edge-symbol"></select>
+              <span class="chip" id="edge-source">booting</span>
+            </div>
+          </div>
+
+          <div class="pred-main">
+            <div class="pred-side" id="pred-side">—</div>
+            <div class="pred-stats">
+              <div class="pred-prob" id="pred-prob">—</div>
+              <div class="pred-sub" id="pred-sub">waiting for data</div>
+            </div>
+            <div class="cd-wrap">
+              <div class="cd-value" id="cd-value">--</div>
+              <div class="cd-label">to candle close</div>
+              <div class="cd-bar"><i id="cd-fill"></i></div>
+            </div>
+          </div>
+
+          <div class="conf-row">
+            <div class="conf-meter"><i id="edge-conf"></i></div>
+            <div class="conf-text" id="edge-conf-text">—</div>
+          </div>
+
+          <div class="pred-note" id="pred-note">Loading market data…</div>
+          <div class="pred-meta-grid" id="pred-meta"></div>
+          <div class="chips mt8" id="edge-chips"></div>
+        </div>
+
+        <div class="two-up">
+          <div class="card">
+            <div class="card-head compact">
+              <div class="eyebrow">Why the engine leans this way</div>
+              <span class="stamp" id="edge-model">—</span>
+            </div>
+            <div class="features" id="features"><p class="empty">No model yet.</p></div>
+          </div>
+
+          <div class="card">
+            <div class="card-head compact"><div class="eyebrow">Stake &amp; expectancy</div></div>
+            <div class="cfg-grid">
+              <label class="field sm"><span>Stake</span><input id="stake-input" type="number" min="1" step="1" value="10" /></label>
+              <label class="field sm"><span>Payout %</span><input id="payout-input" type="number" min="1" max="200" step="1" value="85" /></label>
+            </div>
+            <div class="edge-ev" id="edge-ev">—</div>
+
+            <div class="card-head compact mt"><div class="eyebrow">Session record</div></div>
+            <div class="session-stats" id="session-stats">—</div>
+            <div class="actions mt">
+              <button class="btn small" id="log-call">Log call</button>
+              <button class="btn small ghost" id="reset-session">Reset</button>
+            </div>
+            <p class="micro">Calls are scored automatically when the next candle closes. Logging is manual by design — you should never trade every signal.</p>
+          </div>
+        </div>
+      </div>
+
+      <aside class="edge-rail">
+        <div class="card">
+          <div class="card-head compact">
+            <div class="eyebrow">Analyse a chart image</div>
+            <span class="stamp" id="cap-status">idle</span>
+          </div>
+          <p class="micro">
+            <strong>Mobile:</strong> screenshot your broker chart (Quotex, Pocket, TradingView…) and upload it.
+            <strong>Desktop:</strong> share the browser tab and read it live.
+          </p>
+          <div class="actions">
+            <button class="btn small" id="share-tab">Share tab</button>
+            <button class="btn small ghost" id="upload-img">Upload</button>
+          </div>
+          <input type="file" id="img-input" accept="image/*" hidden />
+
+          <div class="cap-stage" id="cap-stage">
+            <canvas id="cap-canvas"></canvas>
+            <div class="cap-empty" id="cap-empty">No chart loaded — drag on the image to crop the candle area</div>
+          </div>
+
+          <div class="cap-controls">
+            <label class="param">
+              <div class="param-top"><span>Colour sensitivity</span><b id="sens-val">1.0</b></div>
+              <input type="range" id="sens" min="0.4" max="2.4" step="0.1" value="1" />
+            </label>
+            <div class="cap-meta" id="cap-meta">—</div>
+            <button class="btn primary wide" id="cap-analyze" disabled>Analyse chart → next candle</button>
+          </div>
+
+          <details class="cap-manual">
+            <summary>Paste candles manually</summary>
+            <p class="micro">One row per candle, oldest first: <code>open,high,low,close,volume</code></p>
+            <textarea id="manual-ta" rows="4" placeholder="100.2,100.6,100.1,100.5,120&#10;100.5,100.9,100.3,100.4,98"></textarea>
+            <button class="btn small" id="manual-apply">Use pasted candles</button>
+          </details>
+        </div>
+
+        <div class="card disclaimer">
+          <strong>Read this before you risk anything.</strong> A one-minute candle is close to a coin
+          flip. The engine's validation is shown out-of-sample and it will happily tell you there is
+          no edge — that is the point. Binary options, martingale and high leverage can erase an
+          account in minutes. This is a research tool, not a signal service, and not advice.
+        </div>
+      </aside>
+    </div>
+  </section>
+
   <!-- ============================ TERMINAL ============================ -->
-  <section class="panel active" id="tab-chart">
+  <section class="panel" id="tab-chart">
     <div class="terminal-grid">
       <div class="card chart-card">
         <div class="card-head">

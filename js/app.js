@@ -9,6 +9,7 @@ import {
 import { buildContext, STRATEGIES, getStrategy, analyze, WARMUP } from './strategy.js';
 import { runBacktest, DEFAULT_CFG } from './backtest.js';
 import { PriceChart, LineChart, HistogramChart } from './chart.js';
+import { initEdge } from './edge.js';
 import {
   fmt, fmtPrice, fmtPct, fmtMoney, fmtCompact, fmtTime, fmtDate,
   sessionName, clamp
@@ -60,6 +61,7 @@ function boot() {
   ddChart = new LineChart($('dd-chart'), { color: '#ff5d6c', currency: '%', fill: true, baseline: 0 });
   mcChart = new HistogramChart($('mc-chart'));
 
+  initEdge();
   buildOverlayToggles();
   buildStrategyUI();
   renderPlaybook();

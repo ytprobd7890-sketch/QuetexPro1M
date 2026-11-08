@@ -26,6 +26,7 @@ const ctx = new Proxy({}, {
   get(_t, prop) {
     if (prop === 'measureText') return () => ({ width: 42 });
     if (prop === 'createLinearGradient') return () => gradient;
+    if (prop === 'getImageData') return () => ({ data: new Uint8ClampedArray(4), width: 1, height: 1 });
     if (prop === 'canvas') return { width: 900, height: 500 };
     if (prop === 'font' || prop === 'fillStyle' || prop === 'strokeStyle' ||
         prop === 'lineWidth' || prop === 'textAlign' || prop === 'textBaseline' ||
@@ -73,6 +74,27 @@ ok(document.querySelectorAll('#trades-table tbody tr').length >= 1, 'trade log p
 ok(document.querySelectorAll('#pb-strategies .pb-card').length === 6, 'playbook renders 6 strategies');
 ok(document.getElementById('regime-chips').children.length === 4, '4 regime chips');
 ok(document.getElementById('status-text').textContent.length > 4, `status: ${document.getElementById('status-text').textContent}`);
+
+console.log('\n=== 1M Edge tab ===');
+ok(document.getElementById('tab-edge').classList.contains('active'), 'edge tab is the default view');
+ok(['UP ▲', 'DOWN ▼'].includes(document.getElementById('pred-side').textContent), `prediction side: ${document.getElementById('pred-side').textContent}`);
+ok(/\d/.test(document.getElementById('pred-prob').textContent), `probability: ${document.getElementById('pred-prob').textContent}`);
+ok(document.querySelectorAll('#features .feat').length > 0, 'feature contributions rendered');
+ok(document.getElementById('edge-ev').textContent.includes('Breakeven'), 'expectancy box rendered');
+ok(document.getElementById('session-stats').textContent.includes('Hit rate'), 'session record rendered');
+ok(document.getElementById('edge-source').textContent.length > 0, `source badge: ${document.getElementById('edge-source').textContent}`);
+
+// stake change re-renders expectancy
+const stake = document.getElementById('stake-input');
+stake.value = '50';
+stake.dispatchEvent(new window.Event('input'));
+await new Promise((r) => setTimeout(r, 60));
+ok(document.getElementById('edge-ev').textContent.includes('50'), 'stake flows into expectancy');
+
+// log a call
+document.getElementById('log-call').dispatchEvent(new window.Event('click'));
+await new Promise((r) => setTimeout(r, 60));
+ok(document.getElementById('session-stats').textContent.includes('Logged calls 1'), 'call logged to session');
 
 console.log('\n=== Interactions ===');
 // switch timeframe

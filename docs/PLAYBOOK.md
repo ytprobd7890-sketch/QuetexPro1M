@@ -105,6 +105,26 @@ agreement; you are trading the return of control to the buyers.
 
 ---
 
+## 2.7 The 1-minute desk (binary / fixed-time)
+
+The 1M Edge tab predicts the **next** candle (close vs previous close) — exactly what a
+"Higher/Lower, 1 minute" contract settles on. Rules for trading it:
+
+1. **Breakeven first.** At an 85% payout you need **54.1%** accuracy just to break even
+   (`1 / 1.85`). The app prints this next to the model's probability; if EV is negative, the
+   correct position is no position.
+2. **Only trade A-grade.** Edge ≥ 5 probability points *and* positive EV *and* the out-of-sample
+   hit rate above breakeven. Everything else is entertainment.
+3. **Flat stake, never martingale.** Seven doublings from 10 is 1,270 — and a seven-loss run is
+   practically guaranteed over a few hundred trades.
+4. **Three trades a day, −2R stops the desk.** The edge, if any, is in selectivity.
+5. **Verify the read.** After uploading a screenshot, check the green/red boxes sit on the actual
+   candles before you trust a number.
+6. **Log every call** in the session record, including the ones you skipped. The hit rate you
+   measure beats the hit rate you remember.
+
+---
+
 ## 3. Position sizing
 
 ```
