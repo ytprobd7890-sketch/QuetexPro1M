@@ -25,7 +25,7 @@ try {
 }
 ok(Boolean(manifest.name && manifest.short_name), `name "${manifest.short_name}"`);
 ok(manifest.display === 'standalone', 'display = standalone (installs as an app)');
-ok(manifest.start_url === '/?source=pwa', `start_url ${manifest.start_url}`);
+ok(/(^|\.\/)index|^(\.\/)?\?source=pwa$/.test(manifest.start_url) || manifest.start_url.endsWith('?source=pwa'), `start_url ${manifest.start_url}`);
 ok(Array.isArray(manifest.icons) && manifest.icons.length >= 2, `${manifest.icons.length} icons declared`);
 ok(manifest.icons.some((i) => i.sizes === '192x192') && manifest.icons.some((i) => i.sizes === '512x512'), '192 + 512 icon sizes');
 ok(manifest.icons.some((i) => (i.purpose || '').includes('maskable')), 'maskable icon present');
@@ -33,7 +33,7 @@ ok(manifest.icons.some((i) => (i.purpose || '').includes('maskable')), 'maskable
 console.log('\n=== 2. Share target ===');
 const st = manifest.share_target;
 ok(Boolean(st), 'share_target declared');
-ok(st.action === '/share-target', `action ${st?.action}`);
+ok(/^\.?\/?share-target$/.test(st.action), `action ${st?.action} (relative → works under a sub-path)`);
 ok(st.method === 'POST', 'method POST (required for files)');
 ok(st.enctype === 'multipart/form-data', 'enctype multipart/form-data');
 ok(Array.isArray(st.params?.files) && st.params.files[0].name === 'chart', 'accepts a file field named "chart"');
@@ -54,7 +54,8 @@ for (const icon of manifest.icons) {
 
 console.log('\n=== 4. Service worker ===');
 const sw = read('service-worker.js');
-ok(sw.includes("url.pathname === '/share-target'"), 'handles POST /share-target');
+ok(sw.includes('SHARE_PATH') && sw.includes("url.pathname === SHARE_PATH"), 'handles POST /share-target');
+ok(sw.includes("new URL('./', self.registration.scope)"), 'paths resolve against the SW scope (sub-path safe)');
 ok(sw.includes("caches.open(SHARE_CACHE)"), 'stores the shared file in the Cache API');
 ok(sw.includes('Response.redirect'), 'redirects back into the app');
 ok(sw.includes("addEventListener('fetch'"), 'fetch handler installed');
@@ -84,6 +85,7 @@ console.log(`\n${fails === 0 ? '✅ PWA PASSED' : `❌ ${fails} PWA CHECK(S) FAI
 process.exit(fails === 0 ? 0 : 1);
 
 function SHELL_OK(src) {
-  const needed = ['/index.html', '/js/app.js', '/js/edge.js', '/css/styles.css'];
-  return needed.every((n) => src.includes(n));
+  // Paths are relative now (resolved against the SW scope), so match the quoted entry.
+  const needed = ['index.html', 'js/app.js', 'js/edge.js', 'css/styles.css'];
+  return needed.every((n) => src.includes(`'${n}'`));
 }
