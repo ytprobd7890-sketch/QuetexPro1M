@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Quetex Pro 1M — Trading Analysis &amp; Strategy Terminal</title>
+<meta name="description" content="Quetex Pro 1M — 1-minute confluence analysis, signal engine, ATR risk model and event-driven backtester." />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">Q</div>
+    <div class="brand-text">
+      <div class="brand-name">QUETEX PRO <span class="chip-1m">1M</span></div>
+      <div class="brand-sub">Trading Analysis &amp; Strategy Desk</div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <label class="field">
+      <span>Symbol</span>
+      <select id="symbol-select"></select>
+    </label>
+    <label class="field">
+      <span>Timeframe</span>
+      <select id="tf-select"></select>
+    </label>
+    <label class="field">
+      <span>Source</span>
+      <select id="source-select">
+        <option value="auto">Auto · live → sim</option>
+        <option value="live">Live · Binance</option>
+        <option value="sim">Simulated tape</option>
+      </select>
+    </label>
+    <label class="field">
+      <span>Bars</span>
+      <select id="bars-select">
+        <option value="300">300</option>
+        <option value="600" selected>600</option>
+        <option value="1000">1000</option>
+        <option value="1500">1500</option>
+      </select>
+    </label>
+    <button id="load-btn" class="btn primary">Load</button>
+    <button id="seed-btn" class="btn" title="Regenerate the synthetic tape with a new seed">New seed</button>
+    <button id="csv-btn" class="btn ghost" title="Import OHLCV CSV">CSV</button>
+    <input type="file" id="csv-input" accept=".csv,text/csv" hidden />
+  </div>
+
+  <div class="status" id="status">
+    <span class="dot" id="status-dot"></span>
+    <span id="status-text">Booting…</span>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button class="tab active" data-tab="chart" role="tab">Terminal</button>
+  <button class="tab" data-tab="backtest" role="tab">Backtest Lab</button>
+  <button class="tab" data-tab="playbook" role="tab">Strategy Playbook</button>
+  <div class="tab-spacer"></div>
+  <div class="session-pill" id="session-pill">—</div>
+</nav>
+
+<main>
+  <!-- ============================ TERMINAL ============================ -->
+  <section class="panel active" id="tab-chart">
+    <div class="terminal-grid">
+      <div class="card chart-card">
+        <div class="card-head">
+          <div class="pair">
+            <h2 id="pair-title">—</h2>
+            <div class="pair-meta" id="pair-meta">—</div>
+          </div>
+          <div class="price-head">
+            <div class="last-price" id="last-price">—</div>
+            <div class="last-change" id="last-change">—</div>
+          </div>
+          <div class="overlay-toggles" id="overlay-toggles"></div>
+        </div>
+        <div class="chart-wrap"><canvas id="price-chart"></canvas></div>
+        <div class="chart-foot">
+          <div class="seg" id="sub-toggle">
+            <button data-sub="rsi" class="active">RSI</button>
+            <button data-sub="macd">MACD</button>
+          </div>
+          <div class="hint">scroll = zoom · drag = pan · double-click = reset</div>
+        </div>
+      </div>
+
+      <aside class="rail">
+        <div class="card signal-card">
+          <div class="card-head compact">
+            <div class="eyebrow">Signal engine</div>
+            <div class="stamp" id="analysis-time">—</div>
+          </div>
+
+          <div class="bias-row">
+            <div class="bias" id="bias">NEUTRAL</div>
+            <div class="confidence">
+              <div class="conf-top"><span>Confluence</span><strong id="conf-value">0</strong></div>
+              <div class="meter"><div class="meter-fill" id="conf-fill"></div></div>
+            </div>
+          </div>
+
+          <div class="chips" id="regime-chips"></div>
+
+          <div class="verdict" id="verdict">—</div>
+
+          <div class="plan">
+            <div class="plan-row"><span>Entry (market)</span><strong id="plan-entry">—</strong></div>
+            <div class="plan-row"><span>Better entry (pullback)</span><strong id="plan-pullback">—</strong></div>
+            <div class="plan-row stop"><span>Stop loss</span><strong id="plan-stop">—</strong></div>
+            <div class="plan-row tp"><span>TP1 · 1R</span><strong id="plan-tp1">—</strong></div>
+            <div class="plan-row tp"><span>TP2 · 2R</span><strong id="plan-tp2">—</strong></div>
+            <div class="plan-row tp"><span>TP3 · 3R</span><strong id="plan-tp3">—</strong></div>
+            <div class="plan-row"><span>Stop distance</span><strong id="plan-stopdist">—</strong></div>
+          </div>
+
+          <div class="risk-inputs">
+            <label class="field sm"><span>Account</span><input id="acct-input" type="number" min="100" step="100" value="10000" /></label>
+            <label class="field sm"><span>Risk %</span><input id="risk-input" type="number" min="0.1" max="10" step="0.1" value="1" /></label>
+          </div>
+
+          <div class="size-box" id="size-box">
+            <div><span>Position size</span><strong id="size-qty">—</strong></div>
+            <div><span>Notional</span><strong id="size-notional">—</strong></div>
+            <div><span>Risk at stop</span><strong id="size-risk">—</strong></div>
+            <div><span>Leverage</span><strong id="size-lev">—</strong></div>
+          </div>
+
+          <div class="desk-note" id="desk-note">—</div>
+
+          <div class="actions">
+            <button class="btn small" id="copy-plan">Copy trade plan</button>
+            <button class="btn small ghost" id="jump-backtest">Stress-test a strategy</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head compact"><div class="eyebrow">Confluence breakdown</div></div>
+          <div class="components" id="components"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head compact"><div class="eyebrow">Pre-trade checklist</div><span class="stamp" id="check-count">—</span></div>
+          <ul class="checklist" id="checklist"></ul>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============================ BACKTEST ============================ -->
+  <section class="panel" id="tab-backtest">
+    <div class="bt-layout">
+      <div class="card bt-controls">
+        <div class="card-head compact"><div class="eyebrow">Strategy</div></div>
+        <label class="field full"><span>Model</span><select id="strategy-select"></select></label>
+        <p class="strategy-blurb" id="strategy-blurb">—</p>
+
+        <div class="params" id="params"></div>
+
+        <div class="card-head compact mt"><div class="eyebrow">Risk &amp; execution</div></div>
+        <div class="cfg-grid">
+          <label class="field sm"><span>Capital</span><input id="cfg-capital" type="number" min="100" step="100" value="10000" /></label>
+          <label class="field sm"><span>Risk %/trade</span><input id="cfg-risk" type="number" min="0.1" max="10" step="0.1" value="1" /></label>
+          <label class="field sm"><span>Fee (bps/side)</span><input id="cfg-fee" type="number" min="0" max="50" step="0.5" value="4" /></label>
+          <label class="field sm"><span>Slippage (bps)</span><input id="cfg-slip" type="number" min="0" max="50" step="0.5" value="1.5" /></label>
+          <label class="field sm"><span>Max leverage</span><input id="cfg-lev" type="number" min="1" max="20" step="1" value="3" /></label>
+          <label class="field sm check"><span>Allow shorts</span><input id="cfg-short" type="checkbox" checked /></label>
+        </div>
+
+        <button class="btn primary wide" id="run-btn">Run backtest</button>
+        <p class="micro">Signals read on bar close, filled at next bar open. Stops and targets evaluated intrabar, stop-first. Fees charged per side, slippage against the fill.</p>
+      </div>
+
+      <div class="bt-main">
+        <div class="kpi-grid" id="kpi-grid"></div>
+
+        <div class="card">
+          <div class="card-head compact">
+            <div class="eyebrow">Equity curve</div>
+            <div class="legend-inline"><span class="sw" style="background:#2ee6a8"></span>Strategy <span class="sw" style="background:#ff5d6c"></span>Drawdown</div>
+          </div>
+          <div class="chart-wrap small"><canvas id="equity-chart"></canvas></div>
+        </div>
+
+        <div class="two-up">
+          <div class="card">
+            <div class="card-head compact"><div class="eyebrow">Drawdown %</div></div>
+            <div class="chart-wrap mini"><canvas id="dd-chart"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="card-head compact"><div class="eyebrow">Monte Carlo · 1,000 boots</div><span class="stamp" id="mc-stamp">—</span></div>
+            <div class="chart-wrap mini"><canvas id="mc-chart"></canvas></div>
+            <div class="mc-facts" id="mc-facts">—</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head compact">
+            <div class="eyebrow">Trade log</div>
+            <div class="stamp" id="trade-stamp">—</div>
+          </div>
+          <div class="table-scroll">
+            <table class="trades" id="trades-table">
+              <thead>
+                <tr>
+                  <th>#</th><th>Side</th><th>Entry</th><th>Exit</th><th>Bars</th>
+                  <th>R</th><th>P&amp;L</th><th>Reason</th><th>Opened</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ PLAYBOOK ============================ -->
+  <section class="panel" id="tab-playbook">
+    <div class="playbook">
+      <header class="pb-hero">
+        <div class="eyebrow">Quetex desk method</div>
+        <h1>The 1M playbook</h1>
+        <p>
+          Six setups, one risk model. Every idea is filtered through trend, structure, momentum, VWAP and
+          participation before a position exists — then sized off the ATR stop so no single trade can define the month.
+        </p>
+      </header>
+
+      <div class="pb-grid" id="pb-strategies"></div>
+
+      <div class="pb-columns">
+        <div class="card">
+          <div class="card-head compact"><div class="eyebrow">Risk model</div></div>
+          <ul class="bullets">
+            <li><strong>1% risk per trade</strong> of live equity. 0.5% when the ATR percentile is above 0.8 or the session is off-hours.</li>
+            <li><strong>Stop is structural, not cosmetic.</strong> ATR × 1.5–2.0, placed beyond the invalidation swing — never widened after entry.</li>
+            <li><strong>Reward must be ≥ 2R</strong> for trend models, ≥ 1.2R for mean reversion. If the structure cannot offer it, there is no trade.</li>
+            <li><strong>Daily stop:</strong> −2R closes the desk for the day. Drawdown is a budget, not an emotion.</li>
+            <li><strong>Concurrent risk cap:</strong> 3% total across all open positions; correlated pairs count as one.</li>
+            <li><strong>Move to breakeven at +1R</strong>, trail with a 2× ATR band from the extreme. Let the tail pay for the chop.</li>
+            <li><strong>Leverage is an output.</strong> Position size comes from the stop distance; leverage is whatever that produces, capped by the account.</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-head compact"><div class="eyebrow">Session map (UTC)</div></div>
+          <table class="sessions">
+            <thead><tr><th>Window</th><th>Quality</th><th>Playbook bias</th></tr></thead>
+            <tbody>
+              <tr><td>00:00 – 06:00</td><td class="tag-mod">Moderate</td><td>Asia range. Fade extremes, smaller size.</td></tr>
+              <tr><td>06:00 – 11:00</td><td class="tag-high">High</td><td>London open. Breakouts and pullbacks work.</td></tr>
+              <tr><td>11:00 – 16:00</td><td class="tag-top">Highest</td><td>LDN/NY overlap. Best follow-through — full size.</td></tr>
+              <tr><td>16:00 – 21:00</td><td class="tag-high">High</td><td>NY session. Trend continuation to the close.</td></tr>
+              <tr><td>21:00 – 24:00</td><td class="tag-low">Low</td><td>Late NY. Stand down on fresh breakouts.</td></tr>
+            </tbody>
+          </table>
+          <div class="card-head compact mt"><div class="eyebrow">Daily routine</div></div>
+          <ol class="bullets numbered">
+            <li>Bias first: mark the 200 EMA and daily VWAP on the higher timeframe. Longs below the 200 EMA need a range-reversion setup, not a breakout.</li>
+            <li>Mark the last session high/low and the 20-bar range. Those are the only levels that matter for the first hour.</li>
+            <li>Set alerts at the levels. Do not click mid-range.</li>
+            <li>Take the first A-setup. Journal it with the screenshot, the R outcome and whether you followed the plan.</li>
+            <li>Stop at −2R or after three losses. Review, do not revenge.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="card disclaimer">
+        <strong>How to read this desk.</strong> Quetex Pro 1M is an analysis and research tool. Signals, statistics and
+        backtests are computed from price data and a fixed model — they are not advice, not a promise of profit, and past
+        performance never guarantees future results. Validate every model on your own broker's data, spread and commission
+        before risking capital.
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <span>Quetex Pro 1M</span>
+  <span>Analysis &amp; research tool · not investment advice</span>
+  <span id="data-credit">—</span>
+</footer>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

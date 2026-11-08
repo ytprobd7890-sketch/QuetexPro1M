@@ -1,0 +1,24 @@
+{
+  "name": "quetexpro1m",
+  "version": "1.0.0",
+  "description": "Quetex Pro 1M — 1-minute confluence trading analysis, signal and backtesting terminal",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node tests/smoke.mjs && node tests/ui.mjs",
+    "test:engine": "node tests/smoke.mjs",
+    "test:ui": "node tests/ui.mjs"
+  },
+  "keywords": [
+    "trading",
+    "backtest",
+    "indicator",
+    "strategy",
+    "scalping"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "jsdom": "^31.0.0"
+  }
+}
