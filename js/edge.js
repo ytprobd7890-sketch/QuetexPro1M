@@ -9,13 +9,16 @@
  * Everything that predicts goes through predictNextCandle() in predictor.js.
  */
 
-import { SYMBOLS, getSymbol, generateSeries, fetchBinanceKlines } from './data.js';
+import { SYMBOLS, getSymbol, generateSeries, fetchBinanceKlines, mergeCandles } from './data.js';
 import { buildContext } from './strategy.js';
 import { predictNextCandle, binaryExpectancy } from './predictor.js';
 import { analyzeCanvas, parseManualCandles } from './capture.js';
 import { clamp, fmt, sessionName } from './utils.js';
 
 const $ = (id) => document.getElementById(id);
+const on = (id, ev, fn) => { const el = $(id); if (el) el.addEventListener(ev, fn); return el; };
+const setText = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+const setHTML = (id, v) => { const el = $(id); if (el) el.innerHTML = v; };
 
 const E = {
   symbol: 'BTCUSDT',
@@ -31,6 +34,10 @@ const E = {
   tickId: null,
   busy: false,
   pending: null,
+  reason: null,      // why the card is not showing a model, if it is not
+  warmup: null,      // candles collected so far while below the model floor
+  feedGen: 0,        // bumped on every startLive() so late responses are ignored
+  lastGood: null,    // last successfully built prediction (kept during a feed hiccup)
   stake: 10,
   payout: 85,
   session: { calls: 0, wins: 0, losses: 0, streak: 0, best: 0 },
@@ -56,33 +63,38 @@ export function initEdge() {
   ).join('');
   $('edge-symbol').value = E.symbol;
 
-  $('edge-symbol').addEventListener('change', (e) => {
+  on('edge-symbol', 'change', (e) => {
     E.symbol = e.target.value;
     startLive();
   });
 
-  $('stake-input').addEventListener('input', (e) => {
+  on('retry-feed', 'click', () => {
+    toast('Reconnecting the 1-minute feed…');
+    startLive();
+  });
+
+  on('stake-input', 'input', (e) => {
     E.stake = Math.max(1, Number(e.target.value) || 10);
     renderEV();
   });
-  $('payout-input').addEventListener('input', (e) => {
+  on('payout-input', 'input', (e) => {
     E.payout = clamp(Number(e.target.value) || 85, 1, 200);
     renderEV();
   });
 
-  $('log-call').addEventListener('click', logCall);
-  $('reset-session').addEventListener('click', () => {
+  on('log-call', 'click', logCall);
+  on('reset-session', 'click', () => {
     E.session = { calls: 0, wins: 0, losses: 0, streak: 0, best: 0 };
     E.pending = null;
     renderSession();
   });
 
-  $('share-tab').addEventListener('click', shareTab);
-  $('upload-img').addEventListener('click', () => $('img-input').click());
-  $('camera-img').addEventListener('click', () => $('cam-input').click());
-  $('img-input').addEventListener('change', onImagePicked);
-  $('cam-input').addEventListener('change', onImagePicked);
-  $('install-app').addEventListener('click', promptInstall);
+  on('share-tab', 'click', shareTab);
+  on('upload-img', 'click', () => $('img-input')?.click());
+  on('camera-img', 'click', () => $('cam-input')?.click());
+  on('img-input', 'change', onImagePicked);
+  on('cam-input', 'change', onImagePicked);
+  on('install-app', 'click', promptInstall);
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     E.installPrompt = e;
@@ -94,27 +106,36 @@ export function initEdge() {
   // are one tap away instead of buried in a menu.
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent || '');
   if (isIOS && !window.navigator.standalone) $('install-app').hidden = false;
-  $('sens').addEventListener('input', (e) => {
+  on('sens', 'input', (e) => {
     E.cap.sens = Number(e.target.value);
     $('sens-val').textContent = E.cap.sens.toFixed(1);
     if (E.cap.src) analyzeCapture();
   });
-  $('cap-analyze').addEventListener('click', () => useCapturedChart());
-  $('clear-crop').addEventListener('click', clearSavedCrop);
-  $('auto-capture').addEventListener('change', (e) => {
+  on('cap-analyze', 'click', () => useCapturedChart());
+  on('clear-crop', 'click', clearSavedCrop);
+  on('auto-capture', 'change', (e) => {
     if (e.target.checked) startAutoCapture();
     else stopAutoCapture();
   });
-  $('manual-apply').addEventListener('click', applyManual);
+  on('manual-apply', 'click', applyManual);
 
   bindCrop();
 
+  // Old WebViews surface failures as window errors; turn them into an
+  // explanation on the card instead of a page that looks broken.
+  window.addEventListener('error', (ev) => {
+    if (E.pred) return;
+    E.reason = 'engine-error';
+    E.engineError = String((ev && ev.message) || 'script error').slice(0, 140);
+    renderPrediction();
+  });
+
+  // Paint a first frame before the network is touched, then upgrade to LIVE.
   startLive();
   intakeShared();
   E.tickId = setInterval(renderCountdown, 250);
-
   const s = sessionName(Date.now());
-  $('edge-source').textContent = `${s.name}`;
+  setText('edge-session', s.name);
 }
 
 /* ------------------------------------------------------------------ */
@@ -125,61 +146,87 @@ function stopTimers() {
   if (E.pollId) { clearInterval(E.pollId); E.pollId = null; }
 }
 
+/**
+ * Boot the 1-minute engine.
+ *
+ * Order matters and it is the difference between "Prediction Not Showing" and a
+ * card that is populated in the first frame:
+ *
+ *   1. paint a deterministic tape immediately   → prediction visible in <50 ms
+ *   2. ask Binance (all hosts raced, 4.5 s cap) → upgrade to LIVE when/if it lands
+ *   3. on failure keep the painted card, badge DEMO, explain why, stay retryable
+ */
 async function startLive() {
   stopTimers();
+  E.feedGen += 1;
+  const gen = E.feedGen;
   E.mode = 'live';
-  setSource('loading…', '');
-  $('pred-side').className = 'pred-side flat';
-  $('pred-side').textContent = '…';
-  $('pred-prob').textContent = '—';
-  $('pred-sub').textContent = 'loading 1-minute feed';
+  E.reason = null;
+  E.warmup = null;
+  setSource('connecting…', '');
+
+  // 1. instant paint — never an empty card while the network burns its timeout
+  try {
+    const seed = generateSeries({ symbolId: E.symbol, timeframe: '1m', bars: 500, seed: 4242 });
+    applySeries(seed.candles, true);
+    setSource('SIM', 'warn');
+  } catch (err) {
+    E.reason = 'paint-failed';
+    renderPrediction();
+  }
 
   const sym = getSymbol(E.symbol);
-  let payload = null;
-
-  if (sym.binance) {
-    try {
-      payload = await fetchBinanceKlines(E.symbol, '1m', 500);
-    } catch { /* fall through */ }
+  if (!sym.binance) {
+    E.live = false;
+    E.reason = 'sim-symbol';
+    renderPrediction();
+    return;
   }
 
-  E.live = Boolean(payload);
-  if (!payload) {
-    payload = generateSeries({ symbolId: E.symbol, timeframe: '1m', bars: 500, seed: 4242 });
+  // 2. real feed
+  try {
+    const payload = await fetchBinanceKlines(E.symbol, '1m', 500, { timeout: 4500 });
+    if (gen !== E.feedGen) return;          // user switched symbol/timeframe
+    applySeries(payload.candles, false);
+    E.live = true;
+    E.reason = null;
+    E.failedFetchAt = null;
+    setSource('LIVE', 'live');
+    E.pollId = setInterval(pollLive, 4000);
+    renderPrediction();
+  } catch (err) {
+    if (gen !== E.feedGen) return;
+    // 3. blocked feed (Binance is unreachable in several regions)
+    E.live = false;
+    E.reason = 'feed-blocked';
+    E.feedError = err && err.message ? err.message : 'unreachable';
+    E.failedFetchAt = Date.now();
+    setSource('DEMO', 'warn');
+    renderPrediction();
   }
+}
 
-  E.candles = payload.candles;
+function applySeries(candles, isSim) {
+  E.candles = candles;
+  E.isSim = Boolean(isSim);
   E.lastClosedT = null;
   E.forming = null;
   E.pending = null;
-
   onBarUpdate(true);
-  setSource(E.live ? 'LIVE' : 'DEMO', E.live ? 'live' : 'warn');
-
-  if (E.live) E.pollId = setInterval(pollLive, 4000);
-  else {
-    $('pred-note').textContent =
-      'Live Binance feed is blocked in this browser/region, so you are looking at a simulated tape. ' +
-      'That is useless for real money — use “Upload” with a screenshot of your broker chart instead.';
-  }
-  renderCountdown();
 }
 
 async function pollLive() {
   if (E.busy || !E.live) return;
   E.busy = true;
   try {
-    const res = await fetchBinanceKlines(E.symbol, '1m', 3);
-    for (const k of res.candles) {
-      const i = E.candles.findIndex((c) => c.t === k.t);
-      if (i >= 0) E.candles[i] = k;
-      else E.candles.push(k);
-    }
-    E.candles.sort((a, b) => a.t - b.t);
-    if (E.candles.length > 520) E.candles = E.candles.slice(-520);
+    const res = await fetchBinanceKlines(E.symbol, '1m', 3, { timeout: 3500 });
+    E.candles = mergeCandles(E.candles, res.candles, 520);
+    E.lastPollOk = Date.now();
     onBarUpdate();
+    setSource('LIVE', 'live');
   } catch {
-    setSource('feed error', 'error');
+    // A single failed poll must not wipe the model — show the age instead.
+    setSource('LIVE · lagging', 'warn');
   } finally {
     E.busy = false;
   }
@@ -194,24 +241,54 @@ function splitClosed(candles) {
 
 function onBarUpdate(force = false) {
   const closed = splitClosed(E.candles);
-  if (closed.length < 35) return;
-  const lastT = closed[closed.length - 1].t;
-  E.forming = E.candles[E.candles.length - 1];
+  E.forming = E.candles.length ? E.candles[E.candles.length - 1] : null;
+  E.closed = closed;
 
-  if (force || lastT !== E.lastClosedT) {
-    // settle a logged call whose candle has now closed
-    if (E.pending) {
-      const bar = closed.find((c) => c.t === E.pending.barTime);
-      if (bar) settle(bar.c >= E.pending.entry ? 'up' : 'down');
-    }
-    E.closed = closed;
-    E.lastClosedT = lastT;
-    E.ctx = buildContext(closed);
-    E.pred = predictNextCandle(closed, E.ctx);
-    E.mode = 'live';
+  // The model needs history. Previously this returned silently, which left the
+  // card parked on "loading…" forever — the exact "prediction not showing" bug.
+  if (closed.length < 35) {
+    E.warmup = closed.length;
+    E.pred = null;
     renderPrediction();
-    renderSession();
+    renderCountdown();
+    return;
   }
+  E.warmup = null;
+
+  const lastT = closed[closed.length - 1].t;
+  if (!force && lastT === E.lastClosedT) {
+    renderCountdown();
+    return;
+  }
+
+  // settle a logged call whose candle has now closed
+  if (E.pending) {
+    const bar = closed.find((c) => c.t === E.pending.barTime);
+    if (bar) settle(bar.c >= E.pending.entry ? 'up' : 'down');
+  }
+
+  E.lastClosedT = lastT;
+  E.mode = 'live';
+
+  try {
+    E.ctx = buildContext(closed);
+    const pred = predictNextCandle(closed, E.ctx);
+    if (!pred || !Number.isFinite(pred.probUp) || !Number.isFinite(pred.probDown)) {
+      throw new Error('model returned no usable probabilities');
+    }
+    E.pred = pred;
+    E.lastGood = pred;
+    E.reason = null;
+    E.engineError = null;
+  } catch (err) {
+    // Never leave a blank card: keep the previous good model and say what broke.
+    E.reason = 'engine-error';
+    E.engineError = (err && err.message) || 'unknown error';
+    E.pred = E.lastGood;
+  }
+
+  renderPrediction();
+  renderSession();
   renderCountdown();
 }
 
@@ -225,20 +302,70 @@ function setSource(text, cls) {
   el.className = 'chip' + (cls ? ' ' + cls : '');
 }
 
+/**
+ * The "prediction not showing" state — always explains itself.
+ * Three distinct cases, never a blank card:
+ *   warming      collecting the 35 bars the model needs
+ *   feed-blocked the network/Binance refused us
+ *   engine-error predictNextCandle threw
+ */
+function renderNoPrediction() {
+  const side = $('pred-side');
+  const warm = Number.isFinite(E.warmup);
+  const blocked = E.reason === 'feed-blocked';
+  const broke = E.reason === 'engine-error';
+
+  const cardEl = document.querySelector('.pred-card');
+  if (cardEl) cardEl.dataset.side = 'flat';
+  if (side) {
+    side.className = 'pred-side flat';
+    side.textContent = warm ? 'WARM UP' : broke ? 'ENGINE' : blocked ? 'NO FEED' : 'NO DATA';
+  }
+  setText('pred-prob', warm ? `${E.warmup}<small>/35</small>` : '—');
+  setHTML('pred-prob', warm ? `${E.warmup}<small>/35 bars</small>` : '—');
+  setText('pred-sub', warm
+    ? 'collecting history for the model'
+    : broke ? 'the model could not score this series'
+    : blocked ? 'live feed unreachable from this device'
+    : 'waiting for data');
+
+  setText('pred-note', warm
+    ? `Reading the tape — ${E.warmup} of the 35 closed candles the model needs. This fills itself in about ${Math.max(0, 35 - E.warmup)} minutes on a live feed, or instantly from a captured chart.`
+    : broke
+      ? `Engine error: ${E.engineError || 'unknown'}. The previous model is kept on screen until a good one is built.`
+      : blocked
+        ? `Binance could not be reached from this device (${E.feedError || 'network blocked'}). You are seeing a simulated tape — use Upload with a screenshot of your broker chart for a real read.`
+        : 'No model yet — load a chart or wait for the 1-minute feed.');
+
+  setHTML('pred-meta', '');
+  setHTML('edge-chips', blocked
+    ? '<span class="chip warn">simulated tape</span><span class="chip">feed blocked</span>'
+    : '');
+  setHTML('features', `<p class="empty">${warm ? 'Model warms up at 35 closed candles.' : 'No model yet.'}</p>`);
+  const conf = $('edge-conf');
+  if (conf) conf.style.width = '0%';
+  setText('edge-conf-text', '—');
+  setText('edge-model', '—');
+  setNode('edge-ev', '—');
+  renderEV();
+  renderSession();
+}
+
+function setNode(id, text) { const el = $(id); if (el) el.textContent = text; }
+
 function renderPrediction() {
   const p = E.pred;
-  if (!p) {
-    $('pred-side').className = 'pred-side flat';
-    $('pred-side').textContent = 'NO DATA';
-    $('pred-prob').textContent = '—';
-    $('pred-sub').textContent = 'need at least 35 candles';
-    $('pred-note').textContent = 'Not enough candles to build the model. Crop the chart tighter or load more history.';
-    $('features').innerHTML = '<p class="empty">No model yet.</p>';
-    return;
-  }
+  if (!p) { renderNoPrediction(); return; }
 
   const isUp = p.side === 'up';
   const sideProb = isUp ? p.probUp : p.probDown;
+
+  // drives the premium card glow/ring in css/styles.css
+  const card = document.querySelector('.pred-card');
+  if (card) {
+    card.style.setProperty('--p', sideProb.toFixed(3));
+    card.dataset.side = isUp ? 'up' : 'down';
+  }
 
   const sideEl = $('pred-side');
   sideEl.className = 'pred-side ' + (isUp ? 'up' : 'down');
@@ -256,7 +383,9 @@ function renderPrediction() {
     : 'linear-gradient(90deg, #ffb85c, #ff5d6c)';
   $('edge-conf-text').textContent = `edge +${edgePts.toFixed(1)} pts`;
 
-  $('pred-note').textContent = p.note;
+  $('pred-note').textContent = E.isSim && E.reason === 'feed-blocked'
+    ? `${p.note} · simulated tape — Binance is unreachable from this device, so these are not real prices.`
+    : p.note;
   $('edge-model').textContent = p.model === 'logistic'
     ? `logistic · ${p.trainSamples} bars`
     : `rules · ${p.trainSamples} bars`;
@@ -268,7 +397,7 @@ function renderPrediction() {
     ['OOS hit', p.oosHit === null ? 'n/a' : `${(p.oosHit * 100).toFixed(1)}%`],
     ['Holdout', p.oosSamples ? `${p.oosSamples} bars` : '—'],
     ['ATR(14)', `${p.expectedRangePct.toFixed(2)}%`],
-    ['Last close', E.mode === 'live' ? `${cur}${p.entry.toFixed(d)}` : 'chart units'],
+    ['Last close', (E.mode === 'live' || E.isSim) ? `${cur}${p.entry.toFixed(d)}` : 'chart units'],
     ['Signal', new Date(p.lastTime).toISOString().slice(11, 16) + 'Z']
   ];
   $('pred-meta').innerHTML = meta.map(
@@ -282,7 +411,9 @@ function renderPrediction() {
     chips.push(`<span class="chip ${p.desk.regime.vol === 'Expanding' ? 'warn' : ''}">Vol ${p.desk.regime.vol}</span>`);
     chips.push(`<span class="chip">${p.desk.regime.session}</span>`);
   }
-  if (E.mode !== 'live') chips.push('<span class="chip warn">captured chart</span>');
+  if (E.isSim) chips.push('<span class="chip warn">simulated tape</span>');
+  if (E.mode !== 'live' && !E.isSim) chips.push('<span class="chip warn">captured chart</span>');
+  if (E.reason === 'engine-error') chips.push('<span class="chip down">engine warning</span>');
   $('edge-chips').innerHTML = chips.join('');
 
   // feature contributions
@@ -307,6 +438,13 @@ function renderEV() {
   if (!p) { $('edge-ev').innerHTML = '—'; return; }
   const isUp = p.side === 'up';
   const sideProb = isUp ? p.probUp : p.probDown;
+
+  // drives the premium card glow/ring in css/styles.css
+  const card = document.querySelector('.pred-card');
+  if (card) {
+    card.style.setProperty('--p', sideProb.toFixed(3));
+    card.dataset.side = isUp ? 'up' : 'down';
+  }
   const ev = binaryExpectancy(sideProb, E.payout, E.stake);
   const pos = ev.ev >= 0;
 
@@ -714,6 +852,41 @@ function drawCapture() {
   }
 }
 
+/**
+ * Build a prediction from any series (live, captured image, pasted rows) with
+ * the same guarantees: never throws, never returns a half-built model, and
+ * always leaves a renderable state behind.
+ */
+function runModel(candles) {
+  E.closed = candles;
+  E.ctx = null;
+  E.reason = null;
+  E.engineError = null;
+
+  if (!Array.isArray(candles) || candles.length < 35) {
+    E.warmup = Array.isArray(candles) ? candles.length : 0;
+    E.pred = null;
+    return false;
+  }
+  E.warmup = null;
+
+  try {
+    E.ctx = buildContext(candles);
+    const pred = predictNextCandle(candles, E.ctx);
+    if (!pred || !Number.isFinite(pred.probUp) || !Number.isFinite(pred.probDown)) {
+      throw new Error('model returned no usable probabilities');
+    }
+    E.pred = pred;
+    E.lastGood = pred;
+    return true;
+  } catch (err) {
+    E.reason = 'engine-error';
+    E.engineError = (err && err.message) || 'unknown error';
+    E.pred = E.lastGood;
+    return false;
+  }
+}
+
 function useCapturedChart(opts = {}) {
   const silent = Boolean(opts && opts.silent === true);
   const res = E.cap.result;
@@ -724,12 +897,11 @@ function useCapturedChart(opts = {}) {
   stopTimers();
   E.live = false;
   E.mode = 'capture';
+  E.isSim = false;
   E.forming = null;
   E.candles = res.candles;
-  E.closed = res.candles;
   E.lastClosedT = null;
-  E.ctx = buildContext(res.candles);
-  E.pred = predictNextCandle(res.candles, E.ctx);
+  runModel(res.candles);
   setSource('CAPTURED', 'warn');
   $('cd-value').textContent = '--';
   $('cd-fill').style.width = '0%';
@@ -747,12 +919,11 @@ function applyManual() {
     stopTimers();
     E.live = false;
     E.mode = 'paste';
+    E.isSim = false;
     E.forming = null;
     E.candles = candles;
-    E.closed = candles;
     E.lastClosedT = null;
-    E.ctx = buildContext(candles);
-    E.pred = predictNextCandle(candles, E.ctx);
+    runModel(candles);
     setSource('PASTED', 'warn');
     $('cd-value').textContent = '--';
     renderPrediction();

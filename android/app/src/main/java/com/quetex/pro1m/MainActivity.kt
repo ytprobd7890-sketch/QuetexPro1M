@@ -5,11 +5,13 @@ import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.text.InputType
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
@@ -102,13 +104,42 @@ class MainActivity : AppCompatActivity() {
             settings.loadWithOverviewMode = true
             settings.useWideViewPort = true
             webChromeClient = WebChromeClient()
-            webViewClient = WebViewClient()
+            // Broker links (Quotex / market-qx.info, TradingView, …) open in the
+            // system browser so the chart can sit next to Quetex and be captured.
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(
+                    view: WebView,
+                    request: WebResourceRequest
+                ): Boolean = routeUrl(request.url)
+
+                @Suppress("DEPRECATION")
+                override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean =
+                    routeUrl(Uri.parse(url))
+            }
             setBackgroundColor(0xFF05080C.toInt())
         }
 
         root.addView(bar)
         root.addView(webView)
         setContentView(root)
+    }
+
+    /** true = handled outside the WebView. */
+    private fun routeUrl(uri: Uri): Boolean {
+        if (isInternal(uri)) return false
+        return try {
+            startActivity(Intent(Intent.ACTION_VIEW, uri))
+            true
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    private fun isInternal(uri: Uri): Boolean {
+        val host = uri.host ?: return true
+        val appHost = try { Uri.parse(currentUrl()).host } catch (_: Throwable) { null }
+        if (appHost.isNullOrBlank()) return false
+        return host == appHost || host.endsWith(".$appHost")
     }
 
     private fun setCapturing(on: Boolean) {

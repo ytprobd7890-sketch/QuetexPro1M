@@ -11,11 +11,16 @@ everything testable is in this repository.
 
 ```
 npm start        # → http://localhost:8080
-npm test         # 6 suites: engine, capture, predictor, PWA, Android, UI smoke
+npm test         # 7 suites: engine, capture, predictor, resilience, PWA, Android, UI
 npm run test:deep # 269-check deep audit: reference math, invariants, fuzz, security, perf
 ```
 
 No build step, no framework, no charting library. Plain ES modules + canvas.
+
+**Never a blank prediction:** the 1M Edge card paints from a deterministic tape on the first frame and
+only then upgrades to the live Binance feed (all hosts raced, 4.5 s cap). A blocked feed, a slow phone
+or a model error all end in a labelled state — `SIM` / `WARM UP` / `ENGINE` — never an empty card.
+See `tests/resilience.mjs`.
 
 **Android APK:** `Actions → Build Android APK → Run workflow` builds a signed, installable APK
 (`.github/workflows/android-apk.yml`, JDK 17 + SDK 34 + Gradle 8.7) and uploads it as an artifact —

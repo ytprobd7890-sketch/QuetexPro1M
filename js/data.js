@@ -167,24 +167,46 @@ function round(v, d) {
 
 const BINANCE_HOSTS = [
   'https://data-api.binance.vision',
-  'https://api.binance.com'
+  'https://api.binance.com',
+  'https://api1.binance.com',
+  'https://api2.binance.com'
 ];
 
-export async function fetchBinanceKlines(symbolId, timeframe, limit = 600) {
+/** Merge overlapping kline arrays (used by the poller). */
+export function mergeCandles(base, incoming, keep = 520) {
+  const byTime = new Map();
+  for (const c of base) byTime.set(c.t, c);
+  for (const c of incoming) byTime.set(c.t, c);
+  return [...byTime.values()].sort((a, b) => a.t - b.t).slice(-keep);
+}
+
+/**
+ * 1-minute klines from Binance.
+ *
+ * Engine rules that matter for a phone on a blocked/slow network:
+ *   - every host is raced in parallel, so the worst case is ONE timeout (4 s),
+ *     not hosts × timeout;
+ *   - `minRows` defaults to 1 — the 3-row poll used to be rejected by a
+ *     ">= 50 rows" check, which silently froze the live feed;
+ *   - the caller always gets a rejection it can fall back from, never a hang.
+ */
+export async function fetchBinanceKlines(symbolId, timeframe, limit = 600, opts = {}) {
   const sym = getSymbol(symbolId);
   if (!sym.binance) throw new Error('No live feed for this symbol');
-  let lastErr = null;
 
-  for (const host of BINANCE_HOSTS) {
+  const timeout = Number(opts.timeout) > 0 ? Number(opts.timeout) : 4500;
+  const minRows = Number(opts.minRows) > 0 ? Number(opts.minRows) : 1;
+  const rows = Math.max(1, Math.min(Number(limit) || 600, 1000));
+
+  const fromHost = async (host) => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeout);
     try {
-      const url = `${host}/api/v3/klines?symbol=${sym.binance}&interval=${timeframe}&limit=${Math.min(limit, 1000)}`;
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 7000);
-      const res = await fetch(url, { signal: ctrl.signal, cache: 'no-store' });
-      clearTimeout(timer);
+      const url = `${host}/api/v3/klines?symbol=${sym.binance}&interval=${timeframe}&limit=${rows}`;
+      const res = await fetch(url, { signal: ctrl.signal, cache: 'no-store', mode: 'cors' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const raw = await res.json();
-      if (!Array.isArray(raw) || raw.length < 50) throw new Error('Empty response');
+      if (!Array.isArray(raw) || raw.length < minRows) throw new Error('Empty response');
 
       const candles = raw.map((k) => ({
         t: Number(k[0]),
@@ -193,7 +215,9 @@ export async function fetchBinanceKlines(symbolId, timeframe, limit = 600) {
         l: Number(k[3]),
         c: Number(k[4]),
         v: Number(k[5])
-      }));
+      })).filter((c) => [c.t, c.o, c.h, c.l, c.c].every((n) => Number.isFinite(n) && n > 0));
+
+      if (!candles.length) throw new Error('No usable rows');
 
       return {
         candles,
@@ -207,11 +231,25 @@ export async function fetchBinanceKlines(symbolId, timeframe, limit = 600) {
           note: `Binance spot · ${timeframe} · ${candles.length} bars`
         }
       };
-    } catch (err) {
-      lastErr = err;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  if (typeof Promise.any === 'function') {
+    try {
+      return await Promise.any(BINANCE_HOSTS.map(fromHost));
+    } catch {
+      throw new Error(`live feed unreachable after ${timeout} ms`);
     }
   }
-  throw lastErr || new Error('Live feed unavailable');
+
+  // Older WebViews: sequential, still bounded by the same timeout each.
+  let lastErr = null;
+  for (const host of BINANCE_HOSTS) {
+    try { return await fromHost(host); } catch (err) { lastErr = err; }
+  }
+  throw lastErr || new Error('live feed unreachable');
 }
 
 /* ------------------------------------------------------------------ */

@@ -82,7 +82,9 @@
           <div class="card-head">
             <div class="eyebrow">Next-candle engine · 1 minute</div>
             <div class="edge-head-right">
+              <span class="chip ghost-chip" id="edge-session">—</span>
               <select id="edge-symbol"></select>
+              <button class="chip chip-btn" id="retry-feed" title="Reconnect the 1-minute feed">↻ Retry</button>
               <span class="chip" id="edge-source">booting</span>
             </div>
           </div>
@@ -154,6 +156,11 @@
             <button class="btn small ghost" id="camera-img">Camera</button>
             <button class="btn small ghost" id="install-app" hidden>Install app</button>
           </div>
+          <a class="broker-cta" href="https://market-qx.info/en/demo-trade" target="_blank" rel="noopener noreferrer">
+            <span class="live-dot"></span>
+            <span class="broker-text"><b>Open Quotex demo</b><small>market-qx.info · keep it beside Quetex</small></span>
+            <span class="broker-arrow">↗</span>
+          </a>
           <input type="file" id="img-input" accept="image/*" hidden />
           <input type="file" id="cam-input" accept="image/*" capture="environment" hidden />
           <p class="micro" id="cap-hint">

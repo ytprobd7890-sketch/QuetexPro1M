@@ -83,6 +83,10 @@ ok(document.querySelectorAll('#features .feat').length > 0, 'feature contributio
 ok(document.getElementById('edge-ev').textContent.includes('Breakeven'), 'expectancy box rendered');
 ok(document.getElementById('session-stats').textContent.includes('Hit rate'), 'session record rendered');
 ok(document.getElementById('edge-source').textContent.length > 0, `source badge: ${document.getElementById('edge-source').textContent}`);
+ok(document.querySelector('.pred-card').dataset.side === 'up' || document.querySelector('.pred-card').dataset.side === 'down',
+   `prediction card state: ${document.querySelector('.pred-card').dataset.side}`);
+ok(Boolean(document.getElementById('retry-feed')), 'feed retry control present');
+ok(Boolean(document.querySelector('.broker-cta')), 'broker shortcut present');
 
 // stake change re-renders expectancy
 const stake = document.getElementById('stake-input');

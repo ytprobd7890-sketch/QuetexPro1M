@@ -195,9 +195,40 @@ const FEATURE_START = 26;
  * @param {object} ctx     buildContext(candles)
  * @returns {object|null}  prediction descriptor
  */
-export function predictNextCandle(candles, ctx, { trainFrac = 0.7, epochs = 12 } = {}) {
+/**
+ * Public entry point. Never throws: a model that cannot be built returns null,
+ * and the UI turns that into an explicit "warming up / engine error" state
+ * instead of a blank card.
+ */
+export function predictNextCandle(candles, ctx, opts = {}) {
+  try {
+    return sanitizePrediction(predictCore(candles, ctx, opts));
+  } catch {
+    return null;
+  }
+}
+
+function sanitizePrediction(p) {
+  if (!p) return null;
+  let probUp = Number(p.probUp);
+  if (!Number.isFinite(probUp)) return null;
+  probUp = Math.min(0.985, Math.max(0.015, probUp));
+  const features = Array.isArray(p.features) ? p.features.filter((f) => f && Number.isFinite(f.contribution)) : [];
+  return {
+    ...p,
+    probUp,
+    probDown: 1 - probUp,
+    entry: Number.isFinite(p.entry) ? p.entry : 0,
+    atr: Number.isFinite(p.atr) ? p.atr : 0,
+    expectedRangePct: Number.isFinite(p.expectedRangePct) ? p.expectedRangePct : 0,
+    features,
+    allFeatures: Array.isArray(p.allFeatures) ? p.allFeatures : features
+  };
+}
+
+function predictCore(candles, ctx, { trainFrac = 0.7, epochs = 12 } = {}) {
   const n = candles?.length || 0;
-  if (n < 35) return null;
+  if (n < 35 || !ctx) return null;
 
   const last = candles[n - 1];
   const atr = Number.isFinite(ctx.atr[n - 1]) && ctx.atr[n - 1] > 0 ? ctx.atr[n - 1] : last.c * 0.001;

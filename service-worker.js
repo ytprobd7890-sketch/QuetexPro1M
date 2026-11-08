@@ -9,7 +9,7 @@
  * a native client: mobile browsers have no tab-capture API.
  */
 
-const VERSION = 'qp1m-v5';
+const VERSION = 'qp1m-v6';
 const SHARE_CACHE = 'qp1m-share';
 const SHARE_KEY = '/__shared-chart';
 

@@ -42,6 +42,9 @@ const activity = read('app/src/main/java/com/quetex/pro1m/MainActivity.kt');
 ok(activity.includes('createScreenCaptureIntent'), 'requests screen-capture consent');
 ok(activity.includes('webView.evaluateJavascript') || activity.includes('MediaProjectionManager'), 'wired to MediaProjectionManager');
 ok(activity.includes('SharedPreferences') || activity.includes('getSharedPreferences'), 'remembers the app URL');
+ok(activity.includes('shouldOverrideUrlLoading') && activity.includes('ACTION_VIEW'),
+   'broker links open in the system browser instead of dead-ending in the WebView');
+ok(activity.includes('isInternal'), 'app URLs stay inside, everything else leaves');
 
 const service = read('app/src/main/java/com/quetex/pro1m/CaptureService.kt');
 ok(service.includes('FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION'), 'startForeground uses the mediaProjection type');
